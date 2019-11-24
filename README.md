@@ -19,6 +19,7 @@ Decompress a dataset:
 ---
 
 Statistics on Adult Data Set:
+
 | Compression  | Size   |
 |:------------:|:------:|
 | Uncompressed | 4 MB   |
