@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 
-from util import compress_file
+from util.compressor import compress_file
 import sys
 import os
+from timeit import default_timer as timer
+from datetime import timedelta
+from warnings import filterwarnings
 
 def main():
     if (len(sys.argv) < 2):
@@ -16,7 +19,13 @@ def main():
     except IndexError:
         pass
 
+    filterwarnings('ignore')
+
+    start = timer()
     compress_file(infile, outfile)
+    end = timer()
+
+    print(f"Compression completed in {timedelta(seconds=(round(end - start)))}.")
 
 if __name__ == "__main__":
     main()

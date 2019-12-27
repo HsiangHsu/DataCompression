@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 
-from util import decompress_file
+from util.decompressor import decompress_file
 import sys
 import os
+from timeit import default_timer as timer
+from datetime import timedelta
 
 def main():
     if (len(sys.argv) < 2):
@@ -16,7 +18,11 @@ def main():
     except IndexError:
         pass
 
+    start = timer()
     decompress_file(infile, outfile)
+    end = timer()
+
+    print(f"Decompression completed in {timedelta(seconds=(round(end - start)))}.")
 
 if __name__ == "__main__":
     main()
