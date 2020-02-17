@@ -57,12 +57,13 @@ and therefore the MSE is always 0.
 
 Statistics on MNIST Data Set:
 
-| Compression                  | Size   |
-|:----------------------------:|:------:|
-| Uncompressed                 | 47 MB  |
-| ZIP                          | 9.8 MB |
-| B/W Bits                     | 5.9 MB |
-| Row Range Encode Differences | 4.3 MB |
+| Compression                     | Size   |
+|:-------------------------------:|:------:|
+| Uncompressed                    | 47 MB  |
+| ZIP                             | 9.8 MB |
+| B/W Bits                        | 5.9 MB |
+| Row Range Encode Differences    | 4.3 MB |
+| Column Range Encode Differences | 3.9 MB |
 
 B/W Bits compression consists of quantizing every non-zero greyscale pixel
 as a 1 and then encoding each pixel as a bit instead of a byte. Thus,
@@ -79,4 +80,8 @@ flipped. For example, if a given row in the difference image had a 1 for pixels
 in columns `[0, 1, 2, 7, 8, 9]`, then this would be shortened to
 `[0, 3, 7, 10]`. It is this shortened array that is then stored directly (with each value
 being written as a 5-bit number, which is possible since the images are only 28x28).
+
+Column Range Encode Differences runs a similar process, except the transpose of the
+difference bitmap is taken before encoding, such that the difference ranges are
+recorded along columns instead of rows.
 
