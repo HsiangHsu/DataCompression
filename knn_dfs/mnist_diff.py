@@ -4,6 +4,9 @@ Codes for Dataset Compression
 Author: Hsiang Hsu
 email:  hsianghsu@g.harvard.edu
 """
+import logging, os
+logging.disable(logging.WARNING)
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 import tensorflow as tf
 import numpy as np
 import pickle
@@ -11,6 +14,9 @@ from time import localtime, strftime
 from sklearn.neighbors import NearestNeighbors
 import cv2
 from random import sample
+
+from scipy.sparse.csgraph import minimum_spanning_tree
+from mnist_mst_diff import *
 
 from tensorflow.examples.tutorials.mnist import input_data
 mnist = input_data.read_data_sets('MNIST_data')
@@ -54,37 +60,44 @@ neigh = NearestNeighbors(n_neighbors=100, radius=1.0, metric='minkowski', p=2).f
 
 file.write(strftime("%Y-%m-%d-%H.%M.%S\n", localtime()))
 file.flush()
+
+# AGM: Use minimum spanning tree to find a stream of images.
+csr = minimum_spanning_tree(neigh.kneighbors_graph(mode='distance')).toarray()
+edges = csr_to_edges(csr)
+tree = create_tree(edges)
+nodes = mst_to_order(tree, edges)
+
 # A greedy algorithm to find a stream of images
-nodes = []
-i = 0
-diff_imgs = np.zeros((n_samples, 784))
-starting = np.random.randint(0, n_samples, 1)
-
-nodes.append(starting[0])
-diff_imgs[i, :] = X[starting, :]
-
-while len(nodes) != n_samples:
-
-    neigh_dist, neigh_ind = neigh.kneighbors(X[starting, :].reshape(1, -1))
-    neigh_ind = np.squeeze(neigh_ind)
-    for j in range(len(nodes)):
-        neigh_ind = np.delete(neigh_ind, np.where(neigh_ind==nodes[j]))
-    if len(neigh_ind) != 0:
-        nodes.append(neigh_ind[0])
-        starting = neigh_ind[0]
-        diff_imgs[i, :] = X[starting, :]
-    else:
-        all_ = np.arange(n_samples).tolist()
-        candidates = [a for a in all_ if a not in nodes]
-        starting = sample(candidates, 1)
-        nodes.append(starting[0])
-        diff_imgs[i, :] = X[starting, :]
-
-    if len(nodes) % 200 == 0:
-        file.write('{}/{}\n'.format(len(nodes), n_samples))
-        file.flush()
-
-    i=i+1
+# nodes = []
+# i = 0
+# diff_imgs = np.zeros((n_samples, 784))
+# starting = np.random.randint(0, n_samples, 1)
+#
+# nodes.append(starting[0])
+# diff_imgs[i, :] = X[starting, :]
+#
+# while len(nodes) != n_samples:
+#
+#     neigh_dist, neigh_ind = neigh.kneighbors(X[starting, :].reshape(1, -1))
+#     neigh_ind = np.squeeze(neigh_ind)
+#     for j in range(len(nodes)):
+#         neigh_ind = np.delete(neigh_ind, np.where(neigh_ind==nodes[j]))
+#     if len(neigh_ind) != 0:
+#         nodes.append(neigh_ind[0])
+#         starting = neigh_ind[0]
+#         diff_imgs[i, :] = X[starting, :]
+#     else:
+#         all_ = np.arange(n_samples).tolist()
+#         candidates = [a for a in all_ if a not in nodes]
+#         starting = sample(candidates, 1)
+#         nodes.append(starting[0])
+#         diff_imgs[i, :] = X[starting, :]
+#
+#     if len(nodes) % 200 == 0:
+#         file.write('{}/{}\n'.format(len(nodes), n_samples))
+#         file.flush()
+#
+#     i=i+1
 
 file.write(strftime("%Y-%m-%d-%H.%M.%S\n", localtime()))
 file.flush()
