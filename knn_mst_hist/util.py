@@ -2,6 +2,8 @@ import numpy as np
 import pickle
 from scipy.spatial import distance
 
+LOGGING = True
+
 def csr_to_edges(csr):
     edges = []
     for i in range(len(csr)):
@@ -114,3 +116,11 @@ def unpickle(f):
     with open(f, 'rb') as fo:
         data = pickle.load(fo, encoding='bytes')
     return data
+
+def set_logging(logging):
+    global LOGGING
+    LOGGING = logging
+
+def log_print(string):
+    if LOGGING:
+        print(string)
