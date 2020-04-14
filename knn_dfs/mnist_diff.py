@@ -88,10 +88,11 @@ mnist = input_data.read_data_sets('MNIST_data')
 n_samples = 10000
 idx = np.random.choice(mnist.train.labels.shape[0], n_samples, replace=False)
 X = mnist.train.images[idx, :]
+framerate = 24
 
 ######### RANDOM ORDER FOR BENCHMARKING #########
-file.write('Storing the datasets randomly as a VP8 video\n')
-video_maker(filename='mnist_random_'+str(n_samples)+'.avi', imgs=X, shapes=(28, 28), FPS=24)
+file.write('Storing the datasets randomly as a AV1 video\n')
+encode_av1_from_imgs(filename='mnist_random_'+str(n_samples), imgs=X, shapes=(28, 28), FPS=framerate, longest_path=0)
 file.flush()
 
 ######### K-MEANS AND MST #########
@@ -104,11 +105,11 @@ log_current_timestamp(file)
 csr = minimum_spanning_tree(neigh.kneighbors_graph(mode='distance')).toarray()
 edges = csr_to_edges(csr)
 tree = create_tree(edges)
-nodes = mst_to_order(tree, edges)
+nodes, longest_path_len = mst_to_order(tree, edges, return_longest_path_len=True)
 log_current_timestamp(file)
 
 file.write('Storing the datasets using our algorithm as a video\n')
-video_maker(filename='mnist_diff_'+str(n_samples)+'.avi', imgs=X[nodes], shapes=(28, 28), FPS=24)
+encode_av1_from_imgs(filename='mnist_diff_'+str(n_samples), imgs=X[nodes], shapes=(28, 28), FPS=framerate, longest_path=longest_path_len)
 file.flush()
 
 ######### NOT SURE WHAT THIS IS #########
