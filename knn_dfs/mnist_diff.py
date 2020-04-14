@@ -83,7 +83,7 @@ def encode_av1_from_imgs(filename, imgs, shapes, FPS, longest_path):
 ######### BEGIN LOGGING #########
 filename = 'mnist_diff'
 currenttime = localtime()
-file = open(filename+'_log_'+strftime("%m-%d-%H.%M\n", currenttime)+'.txt','w')
+file = open(filename+'_log_'+strftime("%m-%d-%H.%M", currenttime)+'.txt','w')
 log_current_timestamp(file, currenttime)
 
 ######### LOAD DATA #########
@@ -115,15 +115,14 @@ file.write('Storing the datasets using our algorithm as a video\n')
 encode_av1_from_imgs(filename='mnist_diff_'+str(n_samples), imgs=X[nodes], shapes=(28, 28), FPS=framerate, longest_path=longest_path_len)
 file.flush()
 
-######### NOT SURE WHAT THIS IS #########
+######### Serialize the ordered images from our algorithm #########
 file.write('Saving Results\n')
 file.flush()
-f = open('mnist_diff.pickle', 'wb')
-save = {
-    'idx': nodes,
-    'imgs': X[nodes]
-    }
-pickle.dump(save, f, 2)
-f.close()
+with open('mnist_' + str(n_samples) + '_diff_' + strftime("%m-%d-%H-%M", currenttime) + '.pickle', 'wb') as f:
+    save = {
+        'idx': nodes,
+        'imgs': X[nodes]
+        }
+    pickle.dump(save, f, 2)
 
 file.close()
