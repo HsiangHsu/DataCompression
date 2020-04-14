@@ -17,6 +17,7 @@ from random import sample
 from PIL import Image
 import subprocess
 import ffmpeg
+import tempfile
 
 from scipy.sparse.csgraph import minimum_spanning_tree
 from mnist_mst_diff import *
@@ -57,17 +58,19 @@ def encode_av1_from_imgs(filename, imgs, shapes, FPS, longest_path):
     #                    0 if the argument should not be passed to the encoder
     assert longest_path >= 0
 
-    for i in range(imgs.shape[0]):
-        with Image.fromarray((255 * imgs[i].reshape(shapes))).convert('L') as im:
-            im.save('./tmp/img'+str(i)+'.jpg')
-    
     intermediate_filename = 'intermediate_'+filename+'_output'
-    # Generate intermediate mkv container for the ordered images
-    ffmpeg.input('tmp/*.jpg', pattern_type='glob', framerate=str(FPS)
-                ).output(intermediate_filename + '.mkv', vcodec='copy').run()
 
-    # TODO incorporate both these
-    args = ['--passes=2']
+    with tempfile.TemporaryDirectory() as tmpdirname:
+        for i in range(imgs.shape[0]):
+            with Image.fromarray((255 * imgs[i].reshape(shapes))).convert('L') as im:
+                im.save(os.path.join(tmpdirname, 'img'+str(i)+'.jpg'))
+        
+        # Generate intermediate mkv container in current directory for the ordered images
+        ffmpeg.input(tmpdirname + '/*.jpg', pattern_type='glob', framerate=str(FPS)
+                    ).output(intermediate_filename + '.mkv', vcodec='copy').run()
+
+    # TODO incorporate this
+    args = []
     if longest_path > 0:
         args.append('--kf-max-dist=' + str(longest_path)) 
     
