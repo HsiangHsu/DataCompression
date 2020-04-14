@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 """"
 Codes for Dataset Compression
-Author: Hsiang Hsu
-email:  hsianghsu@g.harvard.edu
+Authors: Hsiang Hsu (hsianghsu@g.harvard.edu), Alex Mariona, Madeleine Barowsky
 """
 import logging, os
 logging.disable(logging.WARNING)
@@ -15,25 +14,24 @@ from sklearn.neighbors import NearestNeighbors
 import cv2
 from random import sample
 
+import webm
+from pymkv import MKVFile
+
 from scipy.sparse.csgraph import minimum_spanning_tree
 from mnist_mst_diff import *
 
+# I think this is deprecated and tensorflow_datasets.load is preferred...but anyway
 from tensorflow.examples.tutorials.mnist import input_data
-mnist = input_data.read_data_sets('MNIST_data')
 
-filename = 'mnist_diff'
-file = open(filename+'_log.txt','w')
-file.write(strftime("%Y-%m-%d-%H.%M.%S\n", localtime()))
-file.flush()
+# Given an open filesteam |f|, logs |timestamp| (defualts to localtime())
+# and flushes without closing
+def log_current_timestamp(f, timestamp=None):
+    if timestamp is None:
+        timestamp = localtime()
+    f.write(strftime("%Y-%m-%d-%H.%M.%S\n", timestamp))
+    f.flush()
 
-# n_samples = mnist.train.images.shape[0]
-# X = mnist.train.images
-
-n_samples = 10000
-idx = np.random.choice(mnist.train.labels.shape[0], n_samples, replace=False)
-X = mnist.train.images[idx, :]
-
-def video_maker(filename, imgs, shapes, FPS):
+def avi_video_maker(filename, imgs, shapes, FPS):
     # filename: string, e.g., xxx.avi
     # imgs: numpy array of images
     # sahpes: tuple of dimensions
@@ -49,63 +47,51 @@ def video_maker(filename, imgs, shapes, FPS):
     video.release()
     return
 
-file.write('Storing the datasets randomly as a video\n')
+def video_maker(filename, imgs, shapes, FPS, longest_path, extension=''):
+    # filename: string, e.g., xxx.avi
+    # imgs: numpy array of images
+    # shapes: tuple of dimensions
+    # FPS: int, frame per second
+    args = ['--passes=2', '--kf-max-dist=' + str(longest_path)] 
+    
+    return
+
+
+######### BEGIN LOGGING #########
+filename = 'mnist_diff'
+currenttime = localtime()
+file = open(filename+'_log_'+strftime("%m-%d-%H.%M\n", currenttime)+'.txt','w')
+log_current_timestamp(file, currenttime)
+
+######### LOAD DATA #########
+mnist = input_data.read_data_sets('MNIST_data')
+n_samples = 10000
+idx = np.random.choice(mnist.train.labels.shape[0], n_samples, replace=False)
+X = mnist.train.images[idx, :]
+
+######### RANDOM ORDER FOR BENCHMARKING #########
+file.write('Storing the datasets randomly as a VP8 video\n')
 video_maker(filename='mnist_random_'+str(n_samples)+'.avi', imgs=X, shapes=(28, 28), FPS=24)
 file.flush()
 
-file.write(strftime("%Y-%m-%d-%H.%M.%S\n", localtime()))
-file.flush()
+######### K-MEANS AND MST #########
+log_current_timestamp(file)
 # Fitting k means
 neigh = NearestNeighbors(n_neighbors=100, radius=1.0, metric='minkowski', p=2).fit(X)
-
-file.write(strftime("%Y-%m-%d-%H.%M.%S\n", localtime()))
-file.flush()
+log_current_timestamp(file)
 
 # AGM: Use minimum spanning tree to find a stream of images.
 csr = minimum_spanning_tree(neigh.kneighbors_graph(mode='distance')).toarray()
 edges = csr_to_edges(csr)
 tree = create_tree(edges)
 nodes = mst_to_order(tree, edges)
-
-# A greedy algorithm to find a stream of images
-# nodes = []
-# i = 0
-# diff_imgs = np.zeros((n_samples, 784))
-# starting = np.random.randint(0, n_samples, 1)
-#
-# nodes.append(starting[0])
-# diff_imgs[i, :] = X[starting, :]
-#
-# while len(nodes) != n_samples:
-#
-#     neigh_dist, neigh_ind = neigh.kneighbors(X[starting, :].reshape(1, -1))
-#     neigh_ind = np.squeeze(neigh_ind)
-#     for j in range(len(nodes)):
-#         neigh_ind = np.delete(neigh_ind, np.where(neigh_ind==nodes[j]))
-#     if len(neigh_ind) != 0:
-#         nodes.append(neigh_ind[0])
-#         starting = neigh_ind[0]
-#         diff_imgs[i, :] = X[starting, :]
-#     else:
-#         all_ = np.arange(n_samples).tolist()
-#         candidates = [a for a in all_ if a not in nodes]
-#         starting = sample(candidates, 1)
-#         nodes.append(starting[0])
-#         diff_imgs[i, :] = X[starting, :]
-#
-#     if len(nodes) % 200 == 0:
-#         file.write('{}/{}\n'.format(len(nodes), n_samples))
-#         file.flush()
-#
-#     i=i+1
-
-file.write(strftime("%Y-%m-%d-%H.%M.%S\n", localtime()))
-file.flush()
+log_current_timestamp(file)
 
 file.write('Storing the datasets using our algorithm as a video\n')
 video_maker(filename='mnist_diff_'+str(n_samples)+'.avi', imgs=X[nodes], shapes=(28, 28), FPS=24)
 file.flush()
 
+######### NOT SURE WHAT THIS IS #########
 file.write('Saving Results\n')
 file.flush()
 f = open('mnist_diff.pickle', 'wb')
