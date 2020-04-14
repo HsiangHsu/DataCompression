@@ -14,8 +14,9 @@ from sklearn.neighbors import NearestNeighbors
 import cv2
 from random import sample
 
-import webm
-from pymkv import MKVFile
+from PIL import Image
+import subprocess
+import ffmpeg
 
 from scipy.sparse.csgraph import minimum_spanning_tree
 from mnist_mst_diff import *
@@ -47,13 +48,32 @@ def avi_video_maker(filename, imgs, shapes, FPS):
     video.release()
     return
 
-def video_maker(filename, imgs, shapes, FPS, longest_path, extension=''):
-    # filename: string, e.g., xxx.avi
+def encode_av1_from_imgs(filename, imgs, shapes, FPS, longest_path):
+    # filename: without the extension
     # imgs: numpy array of images
     # shapes: tuple of dimensions
     # FPS: int, frame per second
-    args = ['--passes=2', '--kf-max-dist=' + str(longest_path)] 
+    # longest_path: int, number of images in the longest path in the MST or 
+    #                    0 if the argument should not be passed to the encoder
+    assert longest_path >= 0
+
+    for i in range(imgs.shape[0]):
+        with Image.fromarray((255 * imgs[i].reshape(shapes))).convert('L') as im:
+            im.save('./tmp/img'+str(i)+'.jpg')
     
+    intermediate_filename = 'intermediate_'+filename+'_output'
+    # Generate intermediate mkv container for the ordered images
+    ffmpeg.input('tmp/*.jpg', pattern_type='glob', framerate=str(FPS)
+                ).output(intermediate_filename + '.mkv', vcodec='copy').run()
+
+    # TODO incorporate both these
+    args = ['--passes=2']
+    if longest_path > 0:
+        args.append('--kf-max-dist=' + str(longest_path)) 
+    
+    subprocess.check_call(['webm', '-i', intermediate_filename + '.mkv', '-av1'])
+    subprocess.check_call(['mv', intermediate_filename + '.webm', filename + '.webm'])
+
     return
 
 
