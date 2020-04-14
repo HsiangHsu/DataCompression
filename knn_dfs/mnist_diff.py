@@ -74,7 +74,8 @@ def encode_av1_from_imgs(filename, imgs, shapes, FPS, longest_path):
     if longest_path > 0:
         args.append('--kf-max-dist=' + str(longest_path)) 
     
-    subprocess.check_call(['webm', '-i', intermediate_filename + '.mkv', '-av1'])
+    # -speed 0 is highest quality encoding but slowest
+    subprocess.check_call(['webm', '-i', intermediate_filename + '.mkv', '-av1', '-speed', '0'])
     subprocess.check_call(['mv', intermediate_filename + '.webm', filename + '.webm'])
 
     return
