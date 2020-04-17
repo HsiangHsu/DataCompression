@@ -49,36 +49,57 @@ def avi_video_maker(filename, imgs, shapes, FPS):
     video.release()
     return
 
-def encode_av1_from_imgs(filename, imgs, shapes, FPS, longest_path):
+def encode_video_from_imgs(video_extension, filename, imgs, shapes, FPS, longest_path, 
+                           intermediate_file_format='png', fstream=None):
+    # video_extension: string, either 'av1', 'vp8', or 'vp9'
     # filename: without the extension
     # imgs: numpy array of images
     # shapes: tuple of dimensions
     # FPS: int, frame per second
     # longest_path: int, number of images in the longest path in the MST or 
     #                    0 if the argument should not be passed to the encoder
+    # intermediate_file_format: string, either 'jpg' or 'png'
+    # fstream: stream, (default None) for logging
     assert longest_path >= 0
+    assert intermediate_file_format in valid_intermediate_frame_codecs
+    assert video_extension in valid_output_video_codecs
 
-    intermediate_filename = 'intermediate_'+filename+'_output'
+    intermediate_filename = 'intermediate_' + filename + '_output'
+    optimize = True
+    quality = 95
+    if fstream:
+        fstream.write(("Exporting frames as {0} images with " 
+                       "optimize = {1} and quality = {2}\n").format(intermediate_file_format, 
+                                                                    optimize, quality))
 
     with tempfile.TemporaryDirectory() as tmpdirname:
         for i in range(imgs.shape[0]):
             with Image.fromarray((255 * imgs[i].reshape(shapes))).convert('L') as im:
-                im.save(os.path.join(tmpdirname, 'img'+str(i)+'.jpg'))
+                # Quality param is for JPEG only but PNG will silently ignore
+                im.save(os.path.join(tmpdirname, 'img' + str(i) + '.' + intermediate_file_format),
+                        optimize=True, quality=95)
         
         # Generate intermediate mkv container in current directory for the ordered images
-        ffmpeg.input(tmpdirname + '/*.jpg', pattern_type='glob', framerate=str(FPS)
+        ffmpeg.input(tmpdirname + '/*.' + intermediate_file_format, pattern_type='glob', framerate=str(FPS)
                     ).output(intermediate_filename + '.mkv', vcodec='copy').run()
 
-    # TODO incorporate this
-    args = []
-    if longest_path > 0:
-        args.append('--kf-max-dist=' + str(longest_path)) 
-    
     # -speed 0 is highest quality encoding but slowest
-    subprocess.check_call(['webm', '-i', intermediate_filename + '.mkv', '-av1', '-speed', '0'])
-    subprocess.check_call(['mv', intermediate_filename + '.webm', filename + '.webm'])
+    args = ['-%s' % video_extension, '-speed', '0']
+    raw_ffmpeg_args = ''
+    if video_extension == 'vp9':
+        raw_ffmpeg_args += '-tile-columns 0 -tile-rows 0 '
+    if longest_path > 0:
+        raw_ffmpeg_args += '-g %s' % longest_path
 
-    return
+    if raw_ffmpeg_args:
+        args.append('-fo=%s' % raw_ffmpeg_args)
+    
+    if fstream:
+        fstream.write("Encoding %s video with args = %r\n" % (video_extension, args))
+
+    subprocess.check_call(['webm', '-i', intermediate_filename + '.mkv'] + args)
+    # Rename final output file to the name that was requested
+    subprocess.check_call(['mv', intermediate_filename + '.webm', filename + '.webm'])
 
 
 ######### BEGIN LOGGING #########
@@ -95,26 +116,37 @@ X = mnist.train.images[idx, :]
 framerate = 24
 
 ######### RANDOM ORDER FOR BENCHMARKING #########
-file.write('Storing the datasets randomly as a AV1 video\n')
-encode_av1_from_imgs(filename='mnist_random_'+str(n_samples), imgs=X, shapes=(28, 28), FPS=framerate, longest_path=0)
-file.flush()
-
-######### K-MEANS AND MST #########
+file.write('Storing the datasets randomly as a %s video\n' % video_format)
+encode_video_from_imgs(video_format, filename='mnist_random_'+str(n_samples), imgs=X, 
+                       shapes=(28, 28), FPS=framerate, longest_path=0, fstream=file)
+file.write('Finished encoding the random ordering %s video\n' % video_format)
 log_current_timestamp(file)
-# Fitting k means
-neigh = NearestNeighbors(n_neighbors=100, radius=1.0, metric='minkowski', p=2).fit(X)
+
+######### K-NN AND MST #########
+neighbors = 100
+file.write('Fitting %d-NN graph\n' % neighbors)
+# Fitting K-NN with Euclidean distance
+neigh = NearestNeighbors(n_neighbors=neighbors, metric='minkowski', p=2).fit(X)
+file.write('Finished fitting %d-NN graph\n' % neighbors)
 log_current_timestamp(file)
 
 # AGM: Use minimum spanning tree to find a stream of images.
+file.write('Finding minimum spanning tree\n')
 csr = minimum_spanning_tree(neigh.kneighbors_graph(mode='distance')).toarray()
+file.write('Finished finding minimum spanning tree\n')
+log_current_timestamp(file)
 edges = csr_to_edges(csr)
 tree = create_tree(edges)
+file.write('Converting MST into image ordering\n')
 nodes, longest_path_len = mst_to_order(tree, edges, return_longest_path_len=True)
+file.write('Finished converting MST into image ordering\n')
 log_current_timestamp(file)
 
-file.write('Storing the datasets using our algorithm as a video\n')
-encode_av1_from_imgs(filename='mnist_diff_'+str(n_samples), imgs=X[nodes], shapes=(28, 28), FPS=framerate, longest_path=longest_path_len)
-file.flush()
+file.write('Storing the datasets using our algorithm as %s video\n' % video_format)
+encode_video_from_imgs(video_format, filename='mnist_diff_'+str(n_samples), imgs=X[nodes],
+                       shapes=(28, 28), FPS=framerate, longest_path=longest_path_len, fstream=file)
+file.write('Finished encoding the ordered dataset as %s video\n' % video_format)
+log_current_timestamp(file)
 
 ######### Serialize the ordered images from our algorithm #########
 file.write('Saving Results\n')
