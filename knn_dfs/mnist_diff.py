@@ -3,6 +3,7 @@
 Codes for Dataset Compression
 Authors: Hsiang Hsu (hsianghsu@g.harvard.edu), Alex Mariona, Madeleine Barowsky
 """
+import argparse
 import logging, os
 logging.disable(logging.WARNING)
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
@@ -22,8 +23,23 @@ import tempfile
 from scipy.sparse.csgraph import minimum_spanning_tree
 from mnist_mst_diff import *
 
-# I think this is deprecated and tensorflow_datasets.load is preferred...but anyway
 from tensorflow.examples.tutorials.mnist import input_data
+
+############# COMMAND-LINE ARGUMENTS ########
+parser = argparse.ArgumentParser("Compress image datasets with KNN MST and as video")
+valid_intermediate_frame_codecs = ['jpg', 'png']
+valid_output_video_codecs = ['av1', 'vp8', 'vp9']
+parser.add_argument(
+        '-video_codec', default='av1',
+        help='video codec to be used for output (av1, vp8, vp9)')
+parser.add_argument(
+        '-image_codec', default='png',
+        help='intermediate image frame codec (png, jpg)')
+options = parser.parse_args()
+if options.image_codec not in valid_intermediate_frame_codecs:
+    parser.error('intermediate frame codec must be png or jpg')
+if options.video_codec not in valid_output_video_codecs:
+    parser.error('output video codec must be av1, vp8, or vp9')
 
 # Given an open filesteam |f|, logs |timestamp| (defualts to localtime())
 # and flushes without closing
@@ -114,11 +130,13 @@ n_samples = 10000
 idx = np.random.choice(mnist.train.labels.shape[0], n_samples, replace=False)
 X = mnist.train.images[idx, :]
 framerate = 24
+video_format = options.video_codec
 
 ######### RANDOM ORDER FOR BENCHMARKING #########
 file.write('Storing the datasets randomly as a %s video\n' % video_format)
 encode_video_from_imgs(video_format, filename='mnist_random_'+str(n_samples), imgs=X, 
-                       shapes=(28, 28), FPS=framerate, longest_path=0, fstream=file)
+                       shapes=(28, 28), FPS=framerate, longest_path=0, 
+                       intermediate_file_format=options.image_codec, fstream=file)
 file.write('Finished encoding the random ordering %s video\n' % video_format)
 log_current_timestamp(file)
 
@@ -144,7 +162,8 @@ log_current_timestamp(file)
 
 file.write('Storing the datasets using our algorithm as %s video\n' % video_format)
 encode_video_from_imgs(video_format, filename='mnist_diff_'+str(n_samples), imgs=X[nodes],
-                       shapes=(28, 28), FPS=framerate, longest_path=longest_path_len, fstream=file)
+                       shapes=(28, 28), FPS=framerate, longest_path=longest_path_len, 
+                       intermediate_file_format=options.image_codec, fstream=file)
 file.write('Finished encoding the ordered dataset as %s video\n' % video_format)
 log_current_timestamp(file)
 
