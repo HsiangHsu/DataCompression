@@ -35,6 +35,9 @@ parser.add_argument(
 parser.add_argument(
         '-image_codec', default='png',
         help='intermediate image frame codec (png, jpg)')
+parser.add_argument(
+        '-no_gop', action='store_true', default=False,
+        help='whether the longest path in the MST should be used as the GoP parameter')
 options = parser.parse_args()
 if options.image_codec not in valid_intermediate_frame_codecs:
     parser.error('intermediate frame codec must be png or jpg')
@@ -100,10 +103,11 @@ def encode_video_from_imgs(video_extension, filename, imgs, shapes, FPS, longest
                     ).output(intermediate_filename + '.mkv', vcodec='copy').run()
 
     # -speed 0 is highest quality encoding but slowest
-    args = ['-%s' % video_extension, '-speed', '0']
+    args = ['-%s' % video_extension, '-speed', '0'] if video_extension != 'vp9' else ['-speed', '0']
     raw_ffmpeg_args = ''
-    if video_extension == 'vp9':
+    if video_extension != 'vp8':
         raw_ffmpeg_args += '-tile-columns 0 -tile-rows 0 '
+        
     if longest_path > 0:
         raw_ffmpeg_args += '-g %s' % longest_path
 
@@ -162,7 +166,7 @@ log_current_timestamp(file)
 
 file.write('Storing the datasets using our algorithm as %s video\n' % video_format)
 encode_video_from_imgs(video_format, filename='mnist_diff_'+str(n_samples), imgs=X[nodes],
-                       shapes=(28, 28), FPS=framerate, longest_path=longest_path_len, 
+                       shapes=(28, 28), FPS=framerate, longest_path=(0 if options.no_gop else longest_path_len), 
                        intermediate_file_format=options.image_codec, fstream=file)
 file.write('Finished encoding the ordered dataset as %s video\n' % video_format)
 log_current_timestamp(file)
