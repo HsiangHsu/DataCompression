@@ -1,0 +1,21 @@
+2020-04-17-09.00.40
+Storing the datasets randomly as a av1 video
+Exporting frames as png images with optimize = True and quality = 95
+Encoding av1 video with args = ['-av1', '-speed', '0', '-fo=-tile-columns 0 -tile-rows 0 ']
+Finished encoding the random ordering av1 video
+2020-04-17-10.17.14
+Fitting 100-NN graph
+Finished fitting 100-NN graph
+2020-04-17-10.17.14
+Finding minimum spanning tree
+Finished finding minimum spanning tree
+2020-04-17-10.19.45
+Converting MST into image ordering
+Finished converting MST into image ordering
+2020-04-17-10.20.15
+Storing the datasets using our algorithm as av1 video
+Exporting frames as png images with optimize = True and quality = 95
+Encoding av1 video with args = ['-av1', '-speed', '0', '-fo=-tile-columns 0 -tile-rows 0 ']
+Finished encoding the ordered dataset as av1 video
+2020-04-17-11.18.12
+Saving Results

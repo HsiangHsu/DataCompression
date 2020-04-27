@@ -1,0 +1,21 @@
+2020-04-17-01.07.42
+Storing the datasets randomly as a vp9 video
+Exporting frames as jpg images with optimize = True and quality = 95
+Encoding vp9 video with args = ['-speed', '0', '-fo=-tile-columns 0 -tile-rows 0 ']
+Finished encoding the random ordering vp9 video
+2020-04-17-01.10.39
+Fitting 100-NN graph
+Finished fitting 100-NN graph
+2020-04-17-01.10.39
+Finding minimum spanning tree
+Finished finding minimum spanning tree
+2020-04-17-01.13.07
+Converting MST into image ordering
+Finished converting MST into image ordering
+2020-04-17-01.13.41
+Storing the datasets using our algorithm as vp9 video
+Exporting frames as jpg images with optimize = True and quality = 95
+Encoding vp9 video with args = ['-speed', '0', '-fo=-tile-columns 0 -tile-rows 0 -g 155']
+Finished encoding the ordered dataset as vp9 video
+2020-04-17-01.16.41
+Saving Results
