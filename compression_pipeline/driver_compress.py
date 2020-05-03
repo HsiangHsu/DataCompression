@@ -1,3 +1,13 @@
+'''
+driver_compress.py
+
+This is the executable used to compress a dataset.
+All parameters for compression are passed in as command-line arguments.
+After parsing arguments, the work is delegated to the loader,
+preprocessor, and compressor modules.
+'''
+
+
 import argparse
 import numpy as np
 import sys
@@ -5,6 +15,7 @@ import sys
 import loader
 import preprocessor
 import compressor
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument('dataset', type=str, help='dataset to compress',
@@ -34,9 +45,15 @@ comp_group.add_argument('--enc', type=str, choices=['delta-coo'],
 args = parser.parse_args()
 
 data, labels = loader.load_dataset(args.dataset)
+
+# Save the numpy array form of the dataset in order to validate
+# correctness of decompression
 np.save('data_in', data)
+
 preprocessed_data = preprocessor.preprocess(data, args.pre, psz=args.psz)
+
 compressed_data, metadata = compressor.compress(preprocessed_data, args.comp,
     n_neighbors=args.n_neighbors, metric=args.metric,
     minkowski_p=args.minkowski_p)
-compressor.encode(compressed_data, metadata, args.enc, args)
+
+compressor.encode(compressed_data, metadata, args.enc, vars(args))

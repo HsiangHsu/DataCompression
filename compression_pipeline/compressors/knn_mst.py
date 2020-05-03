@@ -1,5 +1,12 @@
+'''
+knn_mst.py
+
+This module contains helper functions for implementing the KNN-MST compressor.
+'''
+
 import numpy as np
 from scipy.spatial import distance
+
 
 def csr_to_edges(csr):
     edges = []
