@@ -16,4 +16,4 @@ with open(args.args_in, 'rb') as f:
     comp_args = pickle.load(f)
 
 decompressed_data = decompressor.decompress(args.data_in, comp_args)
-print(decompressed_data)
+np.save('data_out', decompressed_data)

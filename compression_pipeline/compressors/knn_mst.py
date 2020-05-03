@@ -75,11 +75,12 @@ def separate_subtrees(forest, remaining_nodes):
         remaining_nodes = remaining_nodes - subtree_nodes
     return subtrees
 
-def mst_to_order(mst):
-    edges = csr_to_edges(mst)
-    tree = create_tree(edges)
+def tree_edges_to_order(tree, edges):
     order = []
-    u = dfs_farthest(tree, list(tree.keys())[0])
+    try:
+        u = dfs_farthest(tree, list(tree.keys())[0])
+    except:
+        return order
     v = dfs_farthest(tree, u)
     path = dfs_path(tree, u, v)
     order.extend(path)
@@ -91,13 +92,22 @@ def mst_to_order(mst):
         subtree_nodes = set(subtree.keys())
         relevant_edges = [[v1, v2] for v1, v2 in remaining_edges if
             v1 in subtree_nodes and v2 in subtree_nodes]
-        order.extend(mst_to_order(subtree, relevant_edges))
+        order.extend(tree_edges_to_order(subtree, relevant_edges))
     return order
+
+def process_mst(mst):
+    edges = csr_to_edges(mst)
+    tree = create_tree(edges)
+    return tree_edges_to_order(tree, edges)
 
 def pad_order(order, n, data):
     missing = np.setdiff1d(np.arange(n), order)
     for m in missing:
         indices = np.where(np.all(data == data[m], axis=1))[0]
-        target = indices[np.where(indices!=m)[0][0]]
+        try:
+            target = np.setdiff1d(indices, missing)[0]
+        except:
+            return indices
         insert_index = order.index(target)
         order.insert(insert_index, m)
+    return order

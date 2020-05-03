@@ -8,7 +8,7 @@ import compressor
 
 parser = argparse.ArgumentParser()
 parser.add_argument('dataset', type=str, help='dataset to compress',
-    choices = ['test', 'mnist'])
+    choices = ['test', 'mnist', 'cifar-10'])
 
 pre_group = parser.add_argument_group('preprocessor')
 pre_group.add_argument('--pre', type=str, choices=['sqpatch'],
@@ -34,6 +34,7 @@ comp_group.add_argument('--enc', type=str, choices=['delta-coo'],
 args = parser.parse_args()
 
 data, labels = loader.load_dataset(args.dataset)
+np.save('data_in', data)
 preprocessed_data = preprocessor.preprocess(data, args.pre, psz=args.psz)
 compressed_data, metadata = compressor.compress(preprocessed_data, args.comp,
     n_neighbors=args.n_neighbors, metric=args.metric,

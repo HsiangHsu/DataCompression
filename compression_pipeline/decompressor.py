@@ -83,9 +83,10 @@ def sqpatch(compression):
         for i in range(n_layers):
             for j in range(patch_dim):
                 for k in range(patch_dim):
-                    decompression[n][0][j*element_dim:(j+1)*element_dim,
+                    decompression[n][i][j*element_dim:(j+1)*element_dim,
                         k*element_dim:(k+1)*element_dim] = \
-                        compression[i][j*patch_dim+k][n].reshape(2, 2)
+                        compression[i][j*patch_dim+k][n].reshape(
+                            element_dim, element_dim)
 
     return decompression.squeeze()
 

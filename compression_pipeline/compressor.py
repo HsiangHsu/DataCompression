@@ -5,7 +5,7 @@ from scipy.sparse.csgraph import minimum_spanning_tree
 from sklearn.neighbors import kneighbors_graph
 from scipy.sparse import coo_matrix
 
-from compressors.knn_mst import mst_to_order, pad_order
+from compressors.knn_mst import process_mst, pad_order
 
 def compress(data, compressor, **kwargs):
     if compressor == 'knn-mst':
@@ -21,19 +21,19 @@ def knn_mst(data, n_neighbors, metric, minkowski_p):
     n_patches = data.shape[1]
     n_elements = data.shape[2]
 
-    # FIND TIGHTEST DTYPE FUNCTION
-
     invor_dtype = find_dtype(n_elements)
     inverse_orders = np.empty((n_layers, n_patches, n_elements),
         dtype=invor_dtype)
+
     ordered_data = np.empty(data.shape, dtype=data.dtype)
+
     for i in range(n_layers):
         for j in range(n_patches):
             knn_graph = kneighbors_graph(data[i][j], n_neighbors=n_neighbors,
                 metric=metric, p=minkowski_p, mode='distance')
             mst = minimum_spanning_tree(knn_graph).toarray()
-            order = mst_to_order(mst)
-            pad_order(order, n_elements, data[i][j])
+            order = process_mst(mst)
+            order = pad_order(order, n_elements, data[i][j])
             inverse_orders[i][j] = np.arange(len(order))[np.argsort(order)]
             ordered_data[i][j] = data[i][j][order]
     return ordered_data, inverse_orders
