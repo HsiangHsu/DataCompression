@@ -26,12 +26,14 @@ args = parser.parse_args()
 with open(args.args_in, 'rb') as f:
     comp_args = pickle.load(f)
 
-compression, metadata = decompressor.decode(args.data_in, comp_args['enc'])
+compression, metadata, original_shape = \
+    decompressor.decode(args.data_in, comp_args['enc'])
 decompressed_data = decompressor.decompress(compression, metadata,
-    comp_args['comp'])
-postprocessed_data = postprocessor.postprocess(decompressed_data,
-    comp_args['pre'])
+    original_shape, comp_args['comp'])
+if comp_args['pre']:
+    decompressed_data = postprocessor.postprocess(decompressed_data,
+        comp_args['pre'])
 
 # Save the numpy array form of the dataset in order to validate
 # correctness of decompression
-np.save('data_out', postprocessed_data)
+np.save('data_out', decompressed_data)

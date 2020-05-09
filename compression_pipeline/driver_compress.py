@@ -19,7 +19,7 @@ import compressor
 
 parser = argparse.ArgumentParser()
 parser.add_argument('dataset', type=str, help='dataset to compress',
-    choices = ['test', 'mnist', 'cifar-10'])
+    choices = ['test', 'mnist', 'cifar-10', 'synthetic'])
 
 pre_group = parser.add_argument_group('preprocessor')
 pre_group.add_argument('--pre', type=str, choices=['sqpatch'],
@@ -39,7 +39,8 @@ comp_group.add_argument('--metric', type=str,
     required='knn-mst' in sys.argv, dest='metric')
 comp_group.add_argument('--minkp', type=int,
     help='parameter for Minkowski metric', dest='minkowski_p', default=2)
-comp_group.add_argument('--enc', type=str, choices=['delta-coo'],
+comp_group.add_argument('--enc', type=str,
+    choices=['delta-coo', 'delta-huff'],
     help='encoder to use', dest='enc', required=True)
 
 args = parser.parse_args()
@@ -50,10 +51,14 @@ data, labels = loader.load_dataset(args.dataset)
 # correctness of decompression
 np.save('data_in', data)
 
-preprocessed_data = preprocessor.preprocess(data, args.pre, psz=args.psz)
+if args.pre:
+    data, element_axis = preprocessor.preprocess(data, args.pre, psz=args.psz)
+else:
+    element_axis = 0
 
-compressed_data, metadata = compressor.compress(preprocessed_data, args.comp,
-    n_neighbors=args.n_neighbors, metric=args.metric,
+compressed_data, local_metadata, original_shape = compressor.compress(data,
+    element_axis, args.comp, n_neighbors=args.n_neighbors, metric=args.metric,
     minkowski_p=args.minkowski_p)
 
-compressor.encode(compressed_data, metadata, args.enc, vars(args))
+compressor.encode(compressed_data, local_metadata, original_shape, args.enc,
+    vars(args))

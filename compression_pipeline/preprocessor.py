@@ -39,10 +39,17 @@ def sqpatch(data, patch_sz):
     Args:
         data: numpy array
             data to be preprocessed, of shape
-            (n_elements, [n_layers], width, with)
+            (n_elements, [n_layers], width, width)
         patch_sz: int
             desired patch width (the original image with must be an integer
             multiple of patch_sz)
+
+    Returns:
+        patched_data: numpy array
+            preprocessed data, of shape
+            (n_layers, n_patches, n_elements, patch_sz**2)
+        original_shape: tuple
+            shape of original data
     '''
 
     assert data.shape[-1] == data.shape[-2], 'elements must be square'
@@ -77,7 +84,8 @@ def sqpatch(data, patch_sz):
     patched_data = patched_data.reshape(*patched_data.shape[:-2],
         patch_sz**2)
 
-    return patched_data
+    # after preprocesssing, element_axis = 2
+    return patched_data, 2
 
 
 def square_crop(element, patches_per_side, patch_sz):

@@ -38,29 +38,36 @@ def sqpatch(decompression):
     Args:
         decompression: numpy array
             decompressed data, of shape
-            (n_layers, n_patches, n_elements, patch_element_size)
+            (n_layers, n_patches, n_elements, n_points)
 
     Returns:
         postprocessed_data: numpy array
             postprocessed data, of shape
-            (n_elements, [n_layers], element_dim, element_dim)
+            (n_elements, [n_layers], sqrt(n_points)*sqrt(n_patches))
     '''
+
     n_layers = decompression.shape[0]
     n_patches = decompression.shape[1]
     n_elements = decompression.shape[2]
-    element_dim = decompression.shape[3]
-    patch_dim = int(sqrt(n_patches))
-    decomp_element_dim = patch_dim*element_dim
+    n_points = decompression.shape[3]
+    patch_width = int(sqrt(n_points))
+    patches_per_side = int(sqrt(n_patches))
+    width = patches_per_side * patch_width
 
-    postprocessed_data = np.empty((n_elements, n_layers, decomp_element_dim,
-        decomp_element_dim), dtype=decompression.dtype)
+    decompression = decompression.reshape(n_layers, n_patches, n_elements,
+        patch_width, patch_width)
+    postprocessed_data = np.empty((n_elements, n_layers, width, width),
+        dtype=decompression.dtype)
 
     for n in range(n_elements):
         for i in range(n_layers):
-            for j in range(patch_dim):
-                for k in range(patch_dim):
-                    postprocessed_data[n][i][j*element_dim:(j+1)*element_dim,
-                        k*element_dim:(k+1)*element_dim] = \
-                        decompression[i][j*patch_dim+k][n]
+            for j in range(patches_per_side):
+                for k in range(patches_per_side):
+                    postprocessed_data[n][i][j*patch_width:(j+1)*patch_width,
+                        k*patch_width:(k+1)*patch_width] = \
+                        decompression[i][j*patches_per_side+k][n]
 
-    return postprocessed_data.squeeze()
+    # Remove extra axes that may have been added by the postprocessor
+    postprocessed_data = postprocessed_data.squeeze()
+
+    return postprocessed_data
