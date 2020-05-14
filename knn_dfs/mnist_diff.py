@@ -130,7 +130,7 @@ log_current_timestamp(file, currenttime)
 
 ######### LOAD DATA #########
 mnist = input_data.read_data_sets('MNIST_data')
-n_samples = 10000
+n_samples = 55000
 idx = np.random.choice(mnist.train.labels.shape[0], n_samples, replace=False)
 X = mnist.train.images[idx, :]
 framerate = 24
