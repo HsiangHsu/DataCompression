@@ -7,6 +7,13 @@ This module contains helper functions for implementing the KNN-MST compressor.
 import numpy as np
 from scipy.spatial import distance
 
+from datetime import timedelta
+from timeit import default_timer as timer
+
+from scipy.sparse import csr_matrix
+from scipy.sparse.csgraph import depth_first_tree, dijkstra, \
+    depth_first_order, connected_components
+
 
 def csr_to_edges(csr):
     edges = []
@@ -108,6 +115,8 @@ def process_mst(mst):
     return tree_edges_to_order(tree, edges)
 
 def pad_order(order, n, data):
+    order = list(order)
+
     missing = np.setdiff1d(np.arange(n), order)
     for m in missing:
         indices = np.where(np.all(data == data[m], axis=1))[0]
@@ -118,3 +127,20 @@ def pad_order(order, n, data):
         insert_index = order.index(target)
         order.insert(insert_index, m)
     return order
+
+def generate_order(mst):
+    nonzero = mst.nonzero()[0]
+    if len(nonzero) == 0:
+        return []
+    order = np.empty(0, np.int32)
+    edges_traversed = 0
+    while True:
+        start_idx = nonzero[0]
+        df_tree = depth_first_tree(mst, start_idx, directed=False)
+        edges_traversed += df_tree.nnz
+        order = np.append(order, depth_first_order(df_tree, start_idx,
+            return_predecessors=False))
+        if edges_traversed == mst.nnz:
+            return order
+        else:
+            nonzero = np.setdiff1d(nonzero, order)

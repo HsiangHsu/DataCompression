@@ -16,6 +16,9 @@ import loader
 import preprocessor
 import compressor
 
+from datetime import timedelta
+from timeit import default_timer as timer
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument('dataset', type=str, help='dataset to compress',
@@ -45,20 +48,37 @@ comp_group.add_argument('--enc', type=str,
 
 args = parser.parse_args()
 
+full_start = timer()
+
+start = timer()
 data, labels = loader.load_dataset(args.dataset)
+end = timer()
+print(f'load in {timedelta(seconds=end-start)}.\n')
 
 # Save the numpy array form of the dataset in order to validate
 # correctness of decompression
 np.save('data_in', data)
 
+start = timer()
 if args.pre:
     data, element_axis = preprocessor.preprocess(data, args.pre, psz=args.psz)
 else:
     element_axis = 0
+end = timer()
+print(f'preprocess in {timedelta(seconds=end-start)}.\n')
 
+start = timer()
 compressed_data, local_metadata, original_shape = compressor.compress(data,
     element_axis, args.comp, n_neighbors=args.n_neighbors, metric=args.metric,
     minkowski_p=args.minkowski_p)
+end = timer()
+print(f'compress in {timedelta(seconds=end-start)}.\n')
 
+start = timer()
 compressor.encode(compressed_data, local_metadata, original_shape, args.enc,
     vars(args))
+end = timer()
+print(f'encode in {timedelta(seconds=end-start)}.\n')
+
+full_end = timer()
+print(f'TOTAL TIME: {timedelta(seconds=full_end-full_start)}.\n')

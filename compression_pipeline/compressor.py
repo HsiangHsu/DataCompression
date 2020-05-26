@@ -12,13 +12,16 @@ Extra modules for implementing the compressors can be found in the
 from math import sqrt, ceil, log2
 import numpy as np
 import pickle
-from scipy.sparse.csgraph import minimum_spanning_tree
+from scipy.sparse.csgraph import minimum_spanning_tree, csgraph_to_masked, \
+    csgraph_to_dense, csgraph_from_dense
 from sklearn.neighbors import kneighbors_graph
 from scipy.sparse import coo_matrix
 
-from compressors.knn_mst import process_mst, pad_order
+from compressors.knn_mst import process_mst, pad_order, generate_order
 from encoders.huffman import get_freqs, huffman_encode
 
+from datetime import timedelta
+from timeit import default_timer as timer
 
 def compress(data, element_axis, compressor, **kwargs):
     '''
@@ -121,12 +124,24 @@ def knn_mst(data, element_axis, n_neighbors, metric, minkowski_p):
     ordered_data = np.empty(data.shape, dtype=data.dtype)
 
     for i in range(n_layers):
+        print(f'\tLayer {i}:')
         # Builds a separate KNN graph and MST for each patch on each layer
+        start = timer()
         knn_graph = kneighbors_graph(data[i], n_neighbors=n_neighbors,
             metric=metric, p=minkowski_p, mode='distance')
-        mst = minimum_spanning_tree(knn_graph).toarray()
-        order = process_mst(mst)
+        end = timer()
+        print(f'\tknn_graph in {timedelta(seconds=end-start)}.')
+        start = timer()
+        mst = minimum_spanning_tree(knn_graph, overwrite=True)
+        end = timer()
+        print(f'\tmst in {timedelta(seconds=end-start)}.')
+        start = timer()
+        order = generate_order(mst)
+        # order = process_mst(mst.toarray())
         order = pad_order(order, n_elements, data[i])
+        assert len(order) == n_elements
+        end = timer()
+        print(f'\torder in {timedelta(seconds=end-start)}.\n')
 
         ordered_data[i] = data[i][order]
         inverse_orders[i] = np.arange(len(order))[np.argsort(order)]
