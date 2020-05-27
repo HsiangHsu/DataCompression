@@ -138,10 +138,13 @@ def knn_mst(data, element_axis, n_neighbors, metric, minkowski_p):
         start = timer()
         order = generate_order(mst)
         # order = process_mst(mst.toarray())
+        end = timer()
+        print(f'\torder in {timedelta(seconds=end-start)}.')
+        start = timer()
         order = pad_order(order, n_elements, data[i])
         assert len(order) == n_elements
         end = timer()
-        print(f'\torder in {timedelta(seconds=end-start)}.\n')
+        print(f'\tpad order in {timedelta(seconds=end-start)}.\n')
 
         ordered_data[i] = data[i][order]
         inverse_orders[i] = np.arange(len(order))[np.argsort(order)]

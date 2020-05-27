@@ -115,24 +115,38 @@ def process_mst(mst):
     return tree_edges_to_order(tree, edges)
 
 def pad_order(order, n, data):
-    order = list(order)
+    missing_idxs = np.setdiff1d(np.arange(n), order)
+    if missing_idxs.shape[0] == n:
+        return missing_idxs
+    try:
+        missing_data = np.unique(data[missing_idxs], axis=0)
+    except:
+        assert order.shape[0] == n
+        return order
 
-    missing = np.setdiff1d(np.arange(n), order)
-    for m in missing:
-        indices = np.where(np.all(data == data[m], axis=1))[0]
-        try:
-            target = np.setdiff1d(indices, missing)[0]
-        except:
-            return indices
-        insert_index = order.index(target)
-        order.insert(insert_index, m)
+    for i in range(missing_data.shape[0]):
+        insert_idx = np.where(np.all(data[order] == missing_data[i], axis=1))[0][0]
+        match_idxs = np.intersect1d(np.where(np.all(data == missing_data[i], axis=1)),
+            missing_idxs)
+        order = np.insert(order, insert_idx, match_idxs)
+
     return order
+
+    # for m in missing:
+    #     indices = np.where(np.all(data == data[m], axis=1))[0]
+    #     try:
+    #         target = np.setdiff1d(indices, missing)[0]
+    #     except:
+    #         return indices
+    #     insert_index = order.index(target)
+    #     order.insert(insert_index, m)
+    # return order
 
 def generate_order(mst):
     nonzero = mst.nonzero()[0]
-    if len(nonzero) == 0:
-        return []
     order = np.empty(0, np.int32)
+    if len(nonzero) == 0:
+        return order
     edges_traversed = 0
     while True:
         start_idx = nonzero[0]
