@@ -43,10 +43,37 @@ comp_group.add_argument('--metric', type=str,
 comp_group.add_argument('--minkp', type=int,
     help='parameter for Minkowski metric', dest='minkowski_p', default=2)
 comp_group.add_argument('--enc', type=str,
-    choices=['delta-coo', 'delta-huff'],
+    choices=['delta-coo', 'delta-huff', 'video'],
     help='encoder to use', dest='enc', required=True)
 
+video_enc_group = parser.add_argument_group('video encoding')
+valid_intermediate_frame_codecs = ['jpg', 'png']
+valid_output_video_codecs = ['av1', 'vp8', 'vp9']
+video_enc_group.add_argument(
+        '--video_codec', default='vp8',
+        help='video codec to be used for output (av1, vp8, vp9)')
+video_enc_group.add_argument(
+        '--image_codec', default='png',
+        help='intermediate image frame codec (png, jpg)')
+# TODO(mbarowsky) Add better GoP (default, max, longest_path/some heuristic) argument
+video_enc_group.add_argument(
+        '--gop_strat', default='default',
+        help='how GoP value should be determined (default, max, [INT])')
+
 args = parser.parse_args()
+
+# Argument validation
+if args.enc == 'video' and not args.comp == 'knn-mst':
+    parser.error('video encoding expects use of KNN-MST ordering')
+if args.image_codec not in valid_intermediate_frame_codecs:
+    parser.error('intermediate frame codec must be png or jpg')
+if args.video_codec not in valid_output_video_codecs:
+    parser.error('output video codec must be av1, vp8, or vp9')
+if args.gop_strat not in ['default', 'max']:
+    try:
+        int(args.gop_strat)
+    except ValueError:
+        parser.error('GoP strategy must be default, max, or an integer')
 
 full_start = timer()
 
@@ -74,9 +101,16 @@ compressed_data, local_metadata, original_shape = compressor.compress(data,
 end = timer()
 print(f'compress in {timedelta(seconds=end-start)}.\n')
 
+kwargs = vars(args)
+if args.video_codec:
+    if args.dataset == 'mnist':
+        kwargs['grayscale'] = True
+    else:
+        kwargs['grayscale'] = False
+
 start = timer()
 compressor.encode(compressed_data, local_metadata, original_shape, args.enc,
-    vars(args))
+    kwargs)
 end = timer()
 print(f'encode in {timedelta(seconds=end-start)}.\n')
 
