@@ -8,12 +8,14 @@ import logging, os
 logging.disable(logging.WARNING)
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 import tensorflow as tf
+import tensorflow_datasets as tfds
 import numpy as np
 import pickle
 from time import localtime, strftime
 from sklearn.neighbors import NearestNeighbors
 import cv2
 from random import sample
+from contextlib import redirect_stdout
 
 from PIL import Image
 import subprocess
@@ -22,8 +24,6 @@ import tempfile
 
 from scipy.sparse.csgraph import minimum_spanning_tree
 from mnist_mst_diff import *
-
-from tensorflow.examples.tutorials.mnist import input_data
 
 ############# COMMAND-LINE ARGUMENTS ########
 parser = argparse.ArgumentParser("Compress image datasets with KNN MST and as video")
@@ -116,10 +116,29 @@ def encode_video_from_imgs(video_extension, filename, imgs, shapes, FPS, longest
     
     if fstream:
         fstream.write("Encoding %s video with args = %r\n" % (video_extension, args))
+        subprocess.run(['webm', '-i', intermediate_filename + '.mkv'] + args, check=True, stderr=fstream)
+        # Rename final output file to the name that was requested
+        subprocess.run(['mv', intermediate_filename + '.webm', filename + '.webm'], check=True, stdout=fstream, stderr=fstream)
+    else:
+        subprocess.run(['webm', '-i', intermediate_filename + '.mkv'] + args, check=True)
+        # Rename final output file to the name that was requested
+        subprocess.run(['mv', intermediate_filename + '.webm', filename + '.webm'], check=True)
 
-    subprocess.check_call(['webm', '-i', intermediate_filename + '.mkv'] + args)
-    # Rename final output file to the name that was requested
-    subprocess.check_call(['mv', intermediate_filename + '.webm', filename + '.webm'])
+def decode_imgs_from_video(video_filename, frame_codec='png', fstream=None):
+    directory_name = ''.join(video_filename.split('.')[0:-1]) + '-frames'
+    assert frame_codec in valid_intermediate_frame_codecs
+    try:    
+        os.mkdir(directory_name)
+    except FileExistsError:
+        print("Directory already exists")
+    probe = ffmpeg.probe(video_filename)
+    video_stream = next((stream for stream in probe['streams'] if stream['codec_type'] == 'video'), None)
+    width = int(video_stream['width'])
+    height = int(video_stream['height'])
+    #pixel_fmt = video_stream['pix_fmt']
+    ffmpeg.input(video_filename).output(directory_name + "/frame%d." + frame_codec, s='%dx%d' % (width, height), 
+                                        start_number=1, pix_fmt='gray').run()
+    
 
 
 ######### BEGIN LOGGING #########
@@ -129,16 +148,17 @@ file = open(filename+'_log_'+strftime("%m-%d-%H.%M", currenttime)+'.txt','w')
 log_current_timestamp(file, currenttime)
 
 ######### LOAD DATA #########
-mnist = input_data.read_data_sets('MNIST_data')
 n_samples = 55000
-idx = np.random.choice(mnist.train.labels.shape[0], n_samples, replace=False)
-X = mnist.train.images[idx, :]
+mnist = tfds.load('mnist', split='train', as_supervised=True)
+X = np.array(list(mnist.take(n_samples).as_numpy_iterator()))
+X = np.array([elem[0].reshape(784,) for elem in X])
 framerate = 24
 video_format = options.video_codec
 
 ######### RANDOM ORDER FOR BENCHMARKING #########
 file.write('Storing the datasets randomly as a %s video\n' % video_format)
-encode_video_from_imgs(video_format, filename='mnist_random_'+str(n_samples), imgs=X, 
+gop_str = 'gop_' if not options.no_gop else 'nogop_'
+encode_video_from_imgs(video_format, filename='mnist_random_'+options.image_codec+'_'+video_format+'_'+gop_str+str(n_samples), imgs=X, 
                        shapes=(28, 28), FPS=framerate, longest_path=0, 
                        intermediate_file_format=options.image_codec, fstream=file)
 file.write('Finished encoding the random ordering %s video\n' % video_format)
@@ -148,13 +168,16 @@ log_current_timestamp(file)
 neighbors = 100
 file.write('Fitting %d-NN graph\n' % neighbors)
 # Fitting K-NN with Euclidean distance
-neigh = NearestNeighbors(n_neighbors=neighbors, metric='minkowski', p=2).fit(X)
+with redirect_stdout(file):
+    neigh = NearestNeighbors(n_neighbors=neighbors, metric='minkowski', p=2).fit(X)
 file.write('Finished fitting %d-NN graph\n' % neighbors)
 log_current_timestamp(file)
 
 # AGM: Use minimum spanning tree to find a stream of images.
 file.write('Finding minimum spanning tree\n')
-csr = minimum_spanning_tree(neigh.kneighbors_graph(mode='distance')).toarray()
+csr = None
+with redirect_stdout(file):
+    csr = minimum_spanning_tree(neigh.kneighbors_graph(mode='distance')).toarray()
 file.write('Finished finding minimum spanning tree\n')
 log_current_timestamp(file)
 edges = csr_to_edges(csr)
@@ -165,7 +188,7 @@ file.write('Finished converting MST into image ordering\n')
 log_current_timestamp(file)
 
 file.write('Storing the datasets using our algorithm as %s video\n' % video_format)
-encode_video_from_imgs(video_format, filename='mnist_diff_'+str(n_samples), imgs=X[nodes],
+encode_video_from_imgs(video_format, filename='mnist_diff_'+options.image_codec+'_'+video_format+'_'+gop_str+str(n_samples), imgs=X[nodes],
                        shapes=(28, 28), FPS=framerate, longest_path=(0 if options.no_gop else longest_path_len), 
                        intermediate_file_format=options.image_codec, fstream=file)
 file.write('Finished encoding the ordered dataset as %s video\n' % video_format)
