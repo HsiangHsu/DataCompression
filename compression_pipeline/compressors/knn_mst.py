@@ -39,7 +39,7 @@ def dfs(graph, start):
             stack.extend(graph[vertex] - visited)
     return visited
 
-def dfs_farthest(graph, start):
+def dfs_farthest(graph, start, return_longest_path_len=False):
     farthest = start
     max_dist = 0
     visited, stack = set(), [[start, 0]]
@@ -51,6 +51,8 @@ def dfs_farthest(graph, start):
                 farthest = vertex
             visited.add(vertex)
             stack.extend([vert, dist+1] for vert in graph[vertex] - visited)
+    if return_longest_path_len:
+        return farthest, max_dist
     return farthest
 
 def dfs_path(graph, start, goal):
@@ -89,13 +91,19 @@ def separate_subtrees(forest, remaining_nodes):
         remaining_nodes = remaining_nodes - subtree_nodes
     return subtrees
 
-def tree_edges_to_order(tree, edges):
+def tree_edges_to_order(tree, edges, return_longest_path_len=False):
+    longest_path_len = -1
     order = []
+    u = None
     try:
         u = dfs_farthest(tree, list(tree.keys())[0])
     except:
         return order
-    v = dfs_farthest(tree, u)
+    v = None
+    if return_longest_path_len:
+        v, longest_path_len = dfs_farthest(tree, u, True)
+    else:
+        v = dfs_farthest(tree, u)
     path = dfs_path(tree, u, v)
     order.extend(path)
     remaining_edges, orphans = remove_path(edges, path)
@@ -106,7 +114,9 @@ def tree_edges_to_order(tree, edges):
         subtree_nodes = set(subtree.keys())
         relevant_edges = [[v1, v2] for v1, v2 in remaining_edges if
             v1 in subtree_nodes and v2 in subtree_nodes]
-        order.extend(tree_edges_to_order(subtree, relevant_edges))
+        order.extend(mst_to_order(subtree, relevant_edges))
+    if return_longest_path_len:
+        return order, longest_path_len
     return order
 
 def process_mst(mst):
