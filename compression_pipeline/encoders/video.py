@@ -58,3 +58,4 @@ def encode_video_from_imgs(video_extension, filename, imgs, shapes, FPS, gop_len
     subprocess.run(['webm', '-i', intermediate_filename + '.mkv'] + args, check=True)
     # Rename final output file to the name that was requested
     subprocess.run(['mv', intermediate_filename + '.webm', filename + '.webm'], check=True)
+    subprocess.run(['rm', intermediate_filename + '.mkv'], check=True)
