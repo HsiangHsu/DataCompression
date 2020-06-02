@@ -9,6 +9,7 @@ shaped numpy array.
 import idx2numpy
 import numpy as np
 import os
+import pandas as pd
 import pickle
 
 
@@ -74,3 +75,20 @@ def load_dataset(dataset):
                 data[(i-1)*10000:i*10000] = raw_data[b'data']
         data = data.reshape(50000, 3, 32, 32)
         return (data, None)
+
+    elif dataset == 'adult':
+        datapath = 'adult.data'
+        df = pd.read_csv(os.path.join(dirpath, datapath), header=None,
+            sep=r',\s+', engine='python')
+        df.columns = [
+            "age", "workclass", "fnlwgt", "education", "education-num",
+            "marital-status", "occupation", "relationship", "race", "gender",
+            "capital-gain", "capital-loss", "hours-per-week", "native-country",
+            "income"
+        ]
+        discrete_cols = df.select_dtypes(['object']).columns
+        for col in discrete_cols:
+            df[col] = df[col].astype('category').cat.codes
+        for col in df:
+            df[col] = pd.to_numeric(df[col], downcast='unsigned')
+        return (np.ascontiguousarray(df.to_numpy()), None)
