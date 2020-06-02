@@ -54,7 +54,10 @@ video_enc_group.add_argument(
         help='video codec to be used for output (av1, vp8, vp9)')
 video_enc_group.add_argument(
         '--image_codec', default='png',
-        help='intermediate image frame codec (png, jpg)')
+        help='intermediate image frame codec (png, jpg)') 
+video_enc_group.add_argument(
+        '--framerate', default=24,
+        type=int) 
 # TODO(mbarowsky) Add better GoP (default, max, longest_path/some heuristic) argument
 video_enc_group.add_argument(
         '--gop_strat', default='default',
@@ -74,7 +77,9 @@ if args.gop_strat not in ['default', 'max']:
         int(args.gop_strat)
     except ValueError:
         parser.error('GoP strategy must be default, max, or an integer')
-
+if args.framerate < 1:
+    parser.error('framerate must be >= 1')
+    
 full_start = timer()
 
 start = timer()
@@ -110,7 +115,7 @@ if args.video_codec:
 
 start = timer()
 compressor.encode(compressed_data, local_metadata, original_shape, args.enc,
-    kwargs)
+                  args, kwargs)
 end = timer()
 print(f'encode in {timedelta(seconds=end-start)}.\n')
 

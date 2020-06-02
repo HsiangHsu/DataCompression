@@ -2,6 +2,7 @@ import ffmpeg
 from PIL import Image
 import subprocess
 import tempfile
+import os
 
 def encode_video_from_imgs(video_extension, filename, imgs, shapes, FPS, gop_len, 
                            intermediate_file_format='png', grayscale=False):
@@ -15,7 +16,7 @@ def encode_video_from_imgs(video_extension, filename, imgs, shapes, FPS, gop_len
     # intermediate_file_format: string, either 'jpg' or 'png'
     # grayscale: if the images are grayscale; specifying this should improve compression
     assert gop_len >= -1
-    assert imgs[0].shape == shapes
+    assert imgs[0].shape[0] == shapes[0] * shapes[1]
 
     intermediate_filename = 'intermediate_output'
     optimize = True

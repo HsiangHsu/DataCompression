@@ -50,7 +50,7 @@ def compress(data, element_axis, compressor, **kwargs):
             kwargs['metric'], kwargs['minkowski_p'])
 
 
-def encode(compression, metadata, original_shape, encoder, args, **kwargs):
+def encode(compression, metadata, original_shape, encoder, args, kwargs):
     '''
     Calls the appropriate encoder
 
@@ -74,7 +74,6 @@ def encode(compression, metadata, original_shape, encoder, args, **kwargs):
     Returns:
         None
     '''
-
     if encoder == 'delta-coo':
         delta_coo(compression, metadata, original_shape, args)
     elif encoder == 'delta-huff':
