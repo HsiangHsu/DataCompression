@@ -158,6 +158,15 @@ def knn_mst(data, element_axis, n_neighbors, metric, minkowski_p):
 def video_enc(compression, metadata, original_shape, args, video_codec, gop_strat, image_codec, framerate, grayscale):
     '''
     Args:
+        compression: numpy array
+            compressed data to be encoded, of shape
+            (n_layers, n_elements, n_points)
+        metadata: numpy array
+            metadata for compression (not necessarily the same metadata
+            that is returned by the loader), of shape
+            (n_layers, n_elements); since this encoder is intended
+            to be used with smart orderings, this will probably be inverse
+            orderings of some sort
         original_shape: tuple
             shape of original data
         args: dict
@@ -170,6 +179,8 @@ def video_enc(compression, metadata, original_shape, args, video_codec, gop_stra
             relative to the first frame as a keyframe 
         image_codec: string
             file format for intermediate frames, either 'jpg' or 'png'
+        framerate: int
+            frames per second of the final video
         grayscale: boolean
             whether the image data is grayscale
     '''
