@@ -10,7 +10,6 @@ from scipy.sparse.csgraph import depth_first_tree, depth_first_order
 from datetime import timedelta
 from timeit import default_timer as timer
 
-
 def generate_order(mst):
     nonzero = mst.nonzero()[0]
     order = np.empty(0, np.int32)
@@ -27,7 +26,6 @@ def generate_order(mst):
             return order
         else:
             nonzero = np.setdiff1d(nonzero, order)
-
 
 def pad_order(order, n, data):
     missing_idxs = np.setdiff1d(np.arange(n), order)

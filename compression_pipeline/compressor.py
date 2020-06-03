@@ -19,6 +19,7 @@ from scipy.sparse import coo_matrix
 
 from compressors.knn_mst import pad_order, generate_order
 from encoders.huffman import get_freqs, huffman_encode
+from encoders.video import encode_video_from_imgs
 
 from datetime import timedelta
 from timeit import default_timer as timer
@@ -49,8 +50,7 @@ def compress(data, element_axis, compressor, **kwargs):
             kwargs['metric'], kwargs['minkowski_p'])
 
 
-def encode(compression, metadata, original_shape, encoder, args,
-    **kwargs):
+def encode(compression, metadata, original_shape, encoder, args, kwargs):
     '''
     Calls the appropriate encoder
 
@@ -74,11 +74,14 @@ def encode(compression, metadata, original_shape, encoder, args,
     Returns:
         None
     '''
-
     if encoder == 'delta-coo':
         delta_coo(compression, metadata, original_shape, args)
     elif encoder == 'delta-huff':
         delta_huff(compression, metadata, original_shape, args)
+    elif encoder == 'video':
+        video_enc(compression, metadata, original_shape, args, 
+                  kwargs['video_codec'], kwargs['gop_strat'], kwargs['image_codec'], 
+                  kwargs['framerate'], kwargs['grayscale'])
 
 
 def knn_mst(data, element_axis, n_neighbors, metric, minkowski_p):
@@ -153,6 +156,53 @@ def knn_mst(data, element_axis, n_neighbors, metric, minkowski_p):
         print(f'\torder in {timedelta(seconds=end-start)}.\n')
 
     return ordered_data, inverse_orders, original_shape
+
+
+def video_enc(compression, metadata, original_shape, args, video_codec, gop_strat, image_codec, framerate, grayscale):
+    '''
+    Args:
+        compression: numpy array
+            compressed data to be encoded, of shape
+            (n_layers, n_elements, n_points)
+        metadata: numpy array
+            metadata for compression (not necessarily the same metadata
+            that is returned by the loader), of shape
+            (n_layers, n_elements); since this encoder is intended
+            to be used with smart orderings, this will probably be inverse
+            orderings of some sort
+        original_shape: tuple
+            shape of original data
+        args: dict
+            all command line arguments passed to driver_compress.py
+        video_codec: string
+            either 'av1', 'vp8', or 'vp9'
+        gop_strat: string 
+            one of 'default', 'max' or [INT] to specify the value for max GoP length;
+            'max' indicates that the number of frames in the dataset will be encoded
+            relative to the first frame as a keyframe 
+        image_codec: string
+            file format for intermediate frames, either 'jpg' or 'png'
+        framerate: int
+            frames per second of the final video
+        grayscale: boolean
+            whether the image data is grayscale
+    '''
+    n_layers = compression.shape[0]
+    n_elements = compression.shape[1]
+    n_points = compression.shape[2]
+
+    ordered_imgs = compression.reshape((n_layers * n_elements, n_points))
+    print('ordered_imgs shape=', ordered_imgs.shape)
+    gop_len = 0
+    if gop_strat == 'max':
+        gop_len = -1
+    elif gop_strat != 'default':
+        gop_len = int(gop_strat)
+    encode_video_from_imgs(video_codec, filename='comp_out', imgs=ordered_imgs,
+                           shapes=original_shape[1:3], FPS=framerate, gop_len=gop_len, 
+                           intermediate_file_format=image_codec, grayscale=grayscale)
+    with open('args_out', 'wb') as f:
+        pickle.dump(args, f)
 
 
 def delta_coo(compression, metadata, original_shape, args):
