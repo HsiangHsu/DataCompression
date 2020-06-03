@@ -22,7 +22,7 @@ from timeit import default_timer as timer
 
 parser = argparse.ArgumentParser()
 parser.add_argument('dataset', type=str, help='dataset to compress',
-    choices = ['test', 'mnist', 'cifar-10', 'synthetic'])
+    choices = ['test', 'mnist', 'cifar-10', 'adult', 'synthetic'])
 
 pre_group = parser.add_argument_group('preprocessor')
 pre_group.add_argument('--pre', type=str, choices=['sqpatch'],

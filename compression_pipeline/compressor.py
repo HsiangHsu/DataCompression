@@ -17,7 +17,7 @@ from scipy.sparse.csgraph import minimum_spanning_tree, csgraph_to_masked, \
 from sklearn.neighbors import kneighbors_graph
 from scipy.sparse import coo_matrix
 
-from compressors.knn_mst import process_mst, pad_order, generate_order
+from compressors.knn_mst import pad_order, generate_order
 from encoders.huffman import get_freqs, huffman_encode
 from encoders.video import encode_video_from_imgs
 
@@ -121,6 +121,7 @@ def knn_mst(data, element_axis, n_neighbors, metric, minkowski_p):
     data = data.reshape((-1, *data.shape[element_axis:]))
     data = data.reshape((*data.shape[:2], -1))
     n_layers = data.shape[0]
+    exit()
 
     invor_dtype = find_dtype(n_elements)
     inverse_orders = np.empty(data.shape[:2], dtype=invor_dtype)
@@ -128,29 +129,31 @@ def knn_mst(data, element_axis, n_neighbors, metric, minkowski_p):
 
     for i in range(n_layers):
         print(f'\tLayer {i}:')
-        # Builds a separate KNN graph and MST for each patch on each layer
         start = timer()
+
+        # Builds a separate KNN graph and MST for each patch on each layer
         knn_graph = kneighbors_graph(data[i], n_neighbors=n_neighbors,
-            metric=metric, p=minkowski_p, mode='distance')
+            metric=metric, p=minkowski_p, mode='distance', n_jobs=-1)
+
         end = timer()
         print(f'\tknn_graph in {timedelta(seconds=end-start)}.')
         start = timer()
+
         mst = minimum_spanning_tree(knn_graph, overwrite=True)
+
         end = timer()
         print(f'\tmst in {timedelta(seconds=end-start)}.')
         start = timer()
-        order = generate_order(mst)
-        # order = process_mst(mst.toarray())
-        end = timer()
-        print(f'\torder in {timedelta(seconds=end-start)}.')
-        start = timer()
-        order = pad_order(order, n_elements, data[i])
-        assert len(order) == n_elements
-        end = timer()
-        print(f'\tpad order in {timedelta(seconds=end-start)}.\n')
 
+        order = generate_order(mst)
+        order = pad_order(order, n_elements, data[i])
+        assert len(order) == n_elements, \
+            "\nfailed to create full order -- try increasing nneigh\n"
         ordered_data[i] = data[i][order]
         inverse_orders[i] = np.arange(len(order))[np.argsort(order)]
+
+        end = timer()
+        print(f'\torder in {timedelta(seconds=end-start)}.\n')
 
     return ordered_data, inverse_orders, original_shape
 
