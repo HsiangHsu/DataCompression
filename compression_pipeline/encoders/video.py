@@ -38,11 +38,11 @@ def encode_video_from_imgs(video_extension, filename, imgs, shapes, FPS, gop_len
         
         # Generate intermediate mkv container in current directory for the ordered images
         ffmpeg.input(tmpdirname + '/*.' + intermediate_file_format, pattern_type='glob', framerate=str(FPS)
-                    ).output(intermediate_filename + '.mkv', vcodec='copy').run()
+                    ).output(intermediate_filename + '.mkv', vcodec='copy').global_args('-loglevel', 'error').run()
 
     # -speed 0 is highest quality encoding but slowest
     args = ['-%s' % video_extension, '-speed', '0'] if video_extension != 'vp9' else ['-speed', '0']
-    raw_ffmpeg_args = ''
+    raw_ffmpeg_args = '-hide_banner -loglevel error '
     if video_extension != 'vp8':
         raw_ffmpeg_args += '-tile-columns 0 -tile-rows 0 '
     
