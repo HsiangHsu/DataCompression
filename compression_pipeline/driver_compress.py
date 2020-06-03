@@ -25,11 +25,15 @@ parser.add_argument('dataset', type=str, help='dataset to compress',
     choices = ['test', 'mnist', 'cifar-10', 'adult', 'synthetic'])
 
 pre_group = parser.add_argument_group('preprocessor')
-pre_group.add_argument('--pre', type=str, choices=['sqpatch'],
+pre_group.add_argument('--pre', type=str,
+    choices=['sqpatch', 'rgb', 'rgb-sqpatch'],
     help='preprocessor to use', dest='pre')
+pre_group.add_argument('--rgb-r', type=int,
+    help='rows in rgb data', dest='rgbr')
+pre_group.add_argument('--rgb-c', type=int,
+    help='cols of rgb data', dest='rgbc')
 pre_group.add_argument('--psz', type=int,
-    help='dimension of cropped patch for sqpatch',
-    required='sqpatch' in sys.argv, dest='psz')
+    help='dimension of cropped patch for sqpatch')
 
 comp_group = parser.add_argument_group('compressor')
 comp_group.add_argument('--comp', type=str, choices=['knn-mst'],
@@ -54,11 +58,11 @@ video_enc_group.add_argument(
         help='video codec to be used for output (av1, vp8, vp9)')
 video_enc_group.add_argument(
         '--image_codec', default='png',
-        help='intermediate image frame codec (png, jpg)') 
+        help='intermediate image frame codec (png, jpg)')
 video_enc_group.add_argument(
-        '--framerate', default=24,
-        type=int) 
-# TODO(mbarowsky) Add better GoP (default, max, longest_path/some heuristic) argument
+        '--framerate', default=24, type=int)
+# TODO(mbarowsky)
+# Add better GoP (default, max, longest_path/some heuristic) argument
 video_enc_group.add_argument(
         '--gop_strat', default='default',
         help='how GoP value should be determined (default, max, [INT])')
@@ -79,7 +83,14 @@ if args.gop_strat not in ['default', 'max']:
         parser.error('GoP strategy must be default, max, or an integer')
 if args.framerate < 1:
     parser.error('framerate must be >= 1')
-    
+
+if (args.pre == 'sqpatch' or args.pre == 'rgb-sqpatch') and not args.psz:
+    parser.error('must supply --psz for sqpatch')
+if (args.pre == 'rgb' or args.pre == 'rgb-sqpatch') and \
+    (not (args.rgbr and args.rgbc)):
+    parser.error('must supply --rgb-r and --rgb-c for rgb')
+
+
 full_start = timer()
 
 start = timer()
@@ -93,7 +104,7 @@ np.save('data_in', data)
 
 start = timer()
 if args.pre:
-    data, element_axis = preprocessor.preprocess(data, args.pre, psz=args.psz)
+    data, element_axis = preprocessor.preprocess(data, args)
 else:
     element_axis = 0
 end = timer()
@@ -101,8 +112,8 @@ print(f'preprocess in {timedelta(seconds=end-start)}.\n')
 
 start = timer()
 compressed_data, local_metadata, original_shape = compressor.compress(data,
-    element_axis, args.comp, n_neighbors=args.n_neighbors, metric=args.metric,
-    minkowski_p=args.minkowski_p)
+    element_axis, args.comp, n_neighbors=args.n_neighbors,
+    metric=args.metric, minkowski_p=args.minkowski_p)
 end = timer()
 print(f'compress in {timedelta(seconds=end-start)}.\n')
 

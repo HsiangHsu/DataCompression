@@ -24,6 +24,7 @@ from encoders.video import encode_video_from_imgs
 from datetime import timedelta
 from timeit import default_timer as timer
 
+
 def compress(data, element_axis, compressor, **kwargs):
     '''
     Calls the appropriate compressor
@@ -79,8 +80,8 @@ def encode(compression, metadata, original_shape, encoder, args, kwargs):
     elif encoder == 'delta-huff':
         delta_huff(compression, metadata, original_shape, args)
     elif encoder == 'video':
-        video_enc(compression, metadata, original_shape, args, 
-                  kwargs['video_codec'], kwargs['gop_strat'], kwargs['image_codec'], 
+        video_enc(compression, metadata, original_shape, args,
+                  kwargs['video_codec'], kwargs['gop_strat'], kwargs['image_codec'],
                   kwargs['framerate'], kwargs['grayscale'])
 
 
@@ -157,7 +158,8 @@ def knn_mst(data, element_axis, n_neighbors, metric, minkowski_p):
     return ordered_data, inverse_orders, original_shape
 
 
-def video_enc(compression, metadata, original_shape, args, video_codec, gop_strat, image_codec, framerate, grayscale):
+def video_enc(compression, metadata, original_shape, args, video_codec,
+    gop_strat, image_codec, framerate, grayscale):
     '''
     Args:
         compression: numpy array
@@ -175,10 +177,10 @@ def video_enc(compression, metadata, original_shape, args, video_codec, gop_stra
             all command line arguments passed to driver_compress.py
         video_codec: string
             either 'av1', 'vp8', or 'vp9'
-        gop_strat: string 
-            one of 'default', 'max' or [INT] to specify the value for max GoP length;
-            'max' indicates that the number of frames in the dataset will be encoded
-            relative to the first frame as a keyframe 
+        gop_strat: string
+            one of 'default', 'max' or [INT] to specify the value for max GoP
+            length; 'max' indicates that the number of frames in the dataset
+            will be encoded relative to the first frame as a keyframe
         image_codec: string
             file format for intermediate frames, either 'jpg' or 'png'
         framerate: int
@@ -197,8 +199,10 @@ def video_enc(compression, metadata, original_shape, args, video_codec, gop_stra
     elif gop_strat != 'default':
         gop_len = int(gop_strat)
     encode_video_from_imgs(video_codec, filename='comp_out', imgs=ordered_imgs,
-                           shapes=original_shape[1:3], FPS=framerate, gop_len=gop_len, 
-                           intermediate_file_format=image_codec, grayscale=grayscale)
+                           shapes=original_shape[1:3], FPS=framerate,
+                           gop_len=gop_len,
+                           intermediate_file_format=image_codec,
+                           grayscale=grayscale)
     with open('args_out', 'wb') as f:
         pickle.dump(args, f)
 

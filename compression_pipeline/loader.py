@@ -73,7 +73,6 @@ def load_dataset(dataset):
             with open(os.path.join(dirpath, datapath), 'rb') as f:
                 raw_data = pickle.load(f, encoding='bytes')
                 data[(i-1)*10000:i*10000] = raw_data[b'data']
-        data = data.reshape(50000, 3, 32, 32)
         return (data, None)
 
     elif dataset == 'adult':

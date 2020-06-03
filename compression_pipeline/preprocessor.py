@@ -9,7 +9,7 @@ compression.
 import numpy as np
 
 
-def preprocess(data, preprocessor, **kwargs):
+def preprocess(data, args):
     '''
     Calls the appropriate preprocessor
 
@@ -24,10 +24,19 @@ def preprocess(data, preprocessor, **kwargs):
     Returns:
         preprocessed_data: numpy array
             preprocessed data
+        element_axis: int
+            index into data.shape for n_elements
     '''
 
+    preprocessor = args.pre
+
     if preprocessor == 'sqpatch':
-        return sqpatch(data, patch_sz=kwargs['psz'])
+        return sqpatch(data, args.psz)
+    if preprocessor == 'rgb':
+        return rgb(data, args.rgbr, args.rgbc)
+    if preprocessor == 'rgb-sqpatch':
+        rgb_data, _ = rgb(data, args.rgbr, args.rgbc)
+        return sqpatch(rgb_data, args.psz)
 
 
 def sqpatch(data, patch_sz):
@@ -48,8 +57,8 @@ def sqpatch(data, patch_sz):
         patched_data: numpy array
             preprocessed data, of shape
             (n_layers, n_patches, n_elements, patch_sz**2)
-        original_shape: tuple
-            shape of original data
+        element_axis: int
+            index into data.shape for n_elements
     '''
 
     assert data.shape[-1] == data.shape[-2], 'elements must be square'
@@ -66,7 +75,6 @@ def sqpatch(data, patch_sz):
         data = data.reshape(data.shape[0], 1, data.shape[1], data.shape[2])
 
     # Reformat data as (n_layers, n_elements, width, width)
-    data = data.swapaxes(0, 1)
 
     n_layers = data.shape[0]
     n_elements = data.shape[1]
@@ -119,3 +127,37 @@ def square_crop(element, patches_per_side, patch_sz):
                 element[i*patch_sz:(i+1)*patch_sz, j*patch_sz:(j+1)*patch_sz]
 
     return cropped
+
+
+def rgb(data, rows, cols):
+    '''
+    RGB reshaping preprocessor
+
+    Flat image data is reshaped into 3 layers, with each layer corresponding to
+    an RGB color channel
+
+    Args:
+        data: numpy array
+            data to be preprocessed, of shape
+            (n_elements, 3*rows*cols)
+        rows: int
+            number of rows in each RGB image
+        cols: int
+            number of columns in each RGB image
+
+    Returns:
+        rgb_data: numpy array
+            RGB data, of shape
+            (3, n_elements, rows, cols)
+        element_axis: int
+            index into data.shape for n_elements
+    '''
+
+    assert len(data.shape) == 2, f'invalid shape for RGB data: {data.shape}'
+    assert data.shape[1] == 3*rows*cols, 'invalid RGB width and/or cols'
+
+    n_elements = data.shape[0]
+    data = data.reshape(n_elements, 3, rows, cols)
+    rgb_data = data.swapaxes(0, 1)
+
+    return rgb_data, 1
