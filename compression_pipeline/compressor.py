@@ -121,7 +121,6 @@ def knn_mst(data, element_axis, n_neighbors, metric, minkowski_p):
     data = data.reshape((-1, *data.shape[element_axis:]))
     data = data.reshape((*data.shape[:2], -1))
     n_layers = data.shape[0]
-    exit()
 
     invor_dtype = find_dtype(n_elements)
     inverse_orders = np.empty(data.shape[:2], dtype=invor_dtype)
@@ -192,7 +191,6 @@ def video_enc(compression, metadata, original_shape, args, video_codec, gop_stra
     n_points = compression.shape[2]
 
     ordered_imgs = compression.reshape((n_layers * n_elements, n_points))
-    print('ordered_imgs shape=', ordered_imgs.shape)
     gop_len = 0
     if gop_strat == 'max':
         gop_len = -1
