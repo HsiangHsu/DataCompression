@@ -5,7 +5,6 @@ This the module responsible for unpacking the desired dataset into a properly
 shaped numpy array.
 '''
 
-
 import idx2numpy
 import numpy as np
 import os
@@ -13,7 +12,7 @@ import pandas as pd
 import pickle
 
 
-def load_dataset(dataset):
+def load(dataset):
     '''
     Loads and shapes a dataset into a numpy array
 

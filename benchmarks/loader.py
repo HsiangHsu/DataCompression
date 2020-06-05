@@ -21,6 +21,4 @@ def get_dataset_path(dataset):
         for i in range(1,6):
             datapath = f'data_batch_{i}'
             datapaths.append(os.path.join(dirpath, datapath))
-        datapaths.append(os.path.join(dirpath, 'test_batch'))
-        datapaths.append(os.path.join(dirpath, 'batches.meta'))
         return datapaths

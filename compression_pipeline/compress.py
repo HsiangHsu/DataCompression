@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 '''
 driver_compress.py
 
@@ -7,14 +9,12 @@ After parsing arguments, the work is delegated to the loader,
 preprocessor, and compressor modules.
 '''
 
-
 import argparse
 import numpy as np
 import sys
 
-import loader
-import preprocessor
-import compressor
+from drivers import preprocess, compress, encode
+from loader import load
 
 from datetime import timedelta
 from timeit import default_timer as timer
@@ -26,7 +26,7 @@ parser.add_argument('dataset', type=str, help='dataset to compress',
 
 pre_group = parser.add_argument_group('preprocessor')
 pre_group.add_argument('--pre', type=str,
-    choices=['sqpatch', 'rgb', 'rgb-sqpatch'],
+    choices=['sqpatch', 'rgb', 'rgb-sqpatch', 'dct'],
     help='preprocessor to use', dest='pre')
 pre_group.add_argument('--rgb-r', type=int,
     help='rows in rgb data', dest='rgbr')
@@ -94,7 +94,7 @@ if (args.pre == 'rgb' or args.pre == 'rgb-sqpatch') and \
 full_start = timer()
 
 start = timer()
-data, labels = loader.load_dataset(args.dataset)
+data, labels = load(args.dataset)
 end = timer()
 print(f'load in {timedelta(seconds=end-start)}.\n')
 
@@ -104,29 +104,26 @@ np.save('data_in', data)
 
 start = timer()
 if args.pre:
-    data, element_axis = preprocessor.preprocess(data, args)
+    data, element_axis = preprocess(data, args)
 else:
     element_axis = 0
 end = timer()
 print(f'preprocess in {timedelta(seconds=end-start)}.\n')
 
 start = timer()
-compressed_data, local_metadata, original_shape = compressor.compress(data,
-    element_axis, args.comp, n_neighbors=args.n_neighbors,
-    metric=args.metric, minkowski_p=args.minkowski_p)
+compressed_data, local_metadata, original_shape = compress(data, element_axis,
+    args)
 end = timer()
 print(f'compress in {timedelta(seconds=end-start)}.\n')
 
-kwargs = vars(args)
 if args.video_codec:
     if args.dataset == 'mnist':
-        kwargs['grayscale'] = True
+        args.grayscale = True
     else:
-        kwargs['grayscale'] = False
+        args.grayscale = False
 
 start = timer()
-compressor.encode(compressed_data, local_metadata, original_shape, args.enc,
-                  args, kwargs)
+encode(compressed_data, local_metadata, original_shape, args)
 end = timer()
 print(f'encode in {timedelta(seconds=end-start)}.\n')
 

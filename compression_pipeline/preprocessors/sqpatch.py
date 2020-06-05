@@ -1,45 +1,13 @@
 '''
-preprocessor.py
+preprocessors/sqpatch.py
 
-This is the module responsible for processing and formatting the data before
-compression.
+This module contains the square patch preprocessor.
 '''
-
 
 import numpy as np
 
 
-def preprocess(data, args):
-    '''
-    Calls the appropriate preprocessor
-
-    Args:
-        data: numpy array
-            data to be preprocessed
-        preprocessor: string
-            preprocessing algorithm to use
-        kwargs: dict
-            arguments to be passed to preprocessing algorithm
-
-    Returns:
-        preprocessed_data: numpy array
-            preprocessed data
-        element_axis: int
-            index into data.shape for n_elements
-    '''
-
-    preprocessor = args.pre
-
-    if preprocessor == 'sqpatch':
-        return sqpatch(data, args.psz)
-    if preprocessor == 'rgb':
-        return rgb(data, args.rgbr, args.rgbc)
-    if preprocessor == 'rgb-sqpatch':
-        rgb_data, _ = rgb(data, args.rgbr, args.rgbc)
-        return sqpatch(rgb_data, args.psz)
-
-
-def sqpatch(data, patch_sz):
+def sqpatch_pre(data, patch_sz):
     '''
     Square patching preprocessor
 
@@ -48,7 +16,7 @@ def sqpatch(data, patch_sz):
     Args:
         data: numpy array
             data to be preprocessed, of shape
-            (n_elements, [n_layers], width, width)
+            ([n_layers], n_elements, width, width)
         patch_sz: int
             desired patch width (the original image with must be an integer
             multiple of patch_sz)
@@ -68,14 +36,9 @@ def sqpatch(data, patch_sz):
     patches_per_side = data.shape[-1] // patch_sz
     n_patches = patches_per_side**2
 
-    # If the n_layers dimension is not present in the original data
-    # (e.g. if the image is a single grayscale layer), add in that dimension
-    # for the sake of generality.
-    if len(data.shape) == 3:
-        data = data.reshape(data.shape[0], 1, data.shape[1], data.shape[2])
-
     # Reformat data as (n_layers, n_elements, width, width)
-
+    if len(data.shape) == 3:
+        data = data.reshape(1, data.shape[0], data.shape[1], data.shape[2])
     n_layers = data.shape[0]
     n_elements = data.shape[1]
 
@@ -88,12 +51,56 @@ def sqpatch(data, patch_sz):
                     patches_per_side, patch_sz)
 
     # Reformat patched_data as (n_layers, n_patches, n_elements, patch_sz**2)
-    patched_data = patched_data.swapaxes(1,2)
+    patched_data = patched_data.swapaxes(1, 2)
     patched_data = patched_data.reshape(*patched_data.shape[:-2],
         patch_sz**2)
 
     # after preprocesssing, element_axis = 2
     return patched_data, 2
+
+
+def sqpatch_post(decomp):
+    '''
+    Square patching postprocessor
+
+    See docstring on the corresponding preprocessor for more information.
+
+    Args:
+        decomp: numpy array
+            decompressed data, of shape
+            (n_layers, n_patches, n_elements, n_points)
+
+    Returns:
+        post_data: numpy array
+            postprocessed data, of shape
+            ([n_layers], n_elements, sqrt(n_points)*sqrt(n_patches))
+    '''
+
+    n_layers = decomp.shape[0]
+    n_patches = decomp.shape[1]
+    n_elements = decomp.shape[2]
+    n_points = decomp.shape[3]
+    patch_width = int(sqrt(n_points))
+    patches_per_side = int(sqrt(n_patches))
+    width = patches_per_side * patch_width
+
+    decomp = decomp.reshape(n_layers, n_patches, n_elements,
+        patch_width, patch_width)
+    post_data = np.empty((n_elements, n_layers, width, width),
+        dtype=decomp.dtype)
+
+    for n in range(n_elements):
+        for i in range(n_layers):
+            for j in range(patches_per_side):
+                for k in range(patches_per_side):
+                    post_data[n][i][j*patch_width:(j+1)*patch_width,
+                        k*patch_width:(k+1)*patch_width] = \
+                        decomp[i][j*patches_per_side+k][n]
+
+    # Remove extra axes that may have been added by the postprocessor
+    post_data = post_data.swapaxes(0, 1).squeeze()
+
+    return post_data
 
 
 def square_crop(element, patches_per_side, patch_sz):
@@ -127,37 +134,3 @@ def square_crop(element, patches_per_side, patch_sz):
                 element[i*patch_sz:(i+1)*patch_sz, j*patch_sz:(j+1)*patch_sz]
 
     return cropped
-
-
-def rgb(data, rows, cols):
-    '''
-    RGB reshaping preprocessor
-
-    Flat image data is reshaped into 3 layers, with each layer corresponding to
-    an RGB color channel
-
-    Args:
-        data: numpy array
-            data to be preprocessed, of shape
-            (n_elements, 3*rows*cols)
-        rows: int
-            number of rows in each RGB image
-        cols: int
-            number of columns in each RGB image
-
-    Returns:
-        rgb_data: numpy array
-            RGB data, of shape
-            (3, n_elements, rows, cols)
-        element_axis: int
-            index into data.shape for n_elements
-    '''
-
-    assert len(data.shape) == 2, f'invalid shape for RGB data: {data.shape}'
-    assert data.shape[1] == 3*rows*cols, 'invalid RGB width and/or cols'
-
-    n_elements = data.shape[0]
-    data = data.reshape(n_elements, 3, rows, cols)
-    rgb_data = data.swapaxes(0, 1)
-
-    return rgb_data, 1
