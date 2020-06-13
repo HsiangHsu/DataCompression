@@ -31,7 +31,7 @@ with open(args.args_in, 'rb') as f:
 compression, metadata, original_shape = decode(args.data_in, comp_args)
 decomp_data = decompress(compression, metadata, original_shape, comp_args)
 if comp_args.pre:
-    decomp_data = postprocessor.postprocess(decomp_data, comp_args)
+    decomp_data = postprocess(decomp_data, comp_args)
 
 # Save the numpy array form of the dataset in order to validate
 # correctness of decompression

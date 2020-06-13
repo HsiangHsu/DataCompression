@@ -43,7 +43,7 @@ def rgb_post(decomp):
     '''
     RGB reshaping postprocessor
 
-    See docstring on the corresponding preprocessor for more information.
+    See docstring on the corresponding preprocessor for more information
 
     Args:
         decomp: numpy array

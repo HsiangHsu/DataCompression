@@ -1,6 +1,6 @@
 from preprocessors.sqpatch import sqpatch_pre, sqpatch_post
 from preprocessors.rgb import rgb_pre, rgb_post
-from preprocessors.dct import dct_pre
+from preprocessors.dct import dct_pre, dct_post
 
 from compressors.knn_mst import knn_mst_comp, knn_mst_decomp
 
@@ -36,7 +36,7 @@ def preprocess(data, args):
         rgb_data, _ = rgb_pre(data, args.rgbr, args.rgbc)
         return sqpatch_pre(rgb_data, args.psz)
     elif preprocessor == 'dct':
-        return dct(data)
+        return dct_pre(data)
 
 
 def compress(data, element_axis, args):
@@ -175,3 +175,5 @@ def postprocess(decomp, args):
         return rgb_post(decomp)
     elif postprocessor == 'rgb-sqpatch':
         return rgb_post(sqpatch_post(decomp))
+    elif postprocessor == 'dct':
+        return dct_post(decomp)

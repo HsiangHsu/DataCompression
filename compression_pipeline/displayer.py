@@ -14,6 +14,10 @@ assert data_in.shape == data_out.shape, \
     f'in: {data_in.shape}, out: {data_out.shape}'
 
 for i in range(data_in.shape[0]):
-    assert (data_in[i]==data_out[i]).all(), f'{i}'
+    try:
+        assert (data_in[i]==data_out[i]).all(), f'{i}'
+    except:
+        assert np.allclose(data_in, data_out, atol=1), \
+        f'{data_in}\n\n{data_out}'
 
 print(data_in, '\n\n', data_out, sep='')
