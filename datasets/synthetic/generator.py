@@ -1,15 +1,22 @@
+import argparse
 import numpy as np
 from numpy.random import default_rng as rng
 
-N_COLS = 1
-N_ROWS = 10
 
 np.set_printoptions(precision=2, suppress=True)
 
+parser = argparse.ArgumentParser()
+parser.add_argument('--rows', type=int, required=True)
+parser.add_argument('--alph', type=int, required=True)
+args = parser.parse_args()
+
+N_COLS = 1
+N_ROWS = args.rows
+ALPH_SIZE = args.alph
+
 # Generate alphas and alphabet size for each column
-# alphabet_size = np.zeros((N_COLS), dtype=np.uint)
-alphabet_size = 3
-alpha = np.full(alphabet_size, 1)
+# ALPH_SIZE = np.zeros((N_COLS), dtype=np.uint)
+alpha = np.full(ALPH_SIZE, 1)
 
 data = np.empty((N_ROWS, N_COLS), dtype=np.uint)
 
