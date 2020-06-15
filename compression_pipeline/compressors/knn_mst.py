@@ -152,6 +152,7 @@ def pad_order(order, n, data):
                 axis=1))[0][0]
         except:
             print("\npad_order failed -- try increasing nneigh\n")
+            exit()
         match_idxs = np.intersect1d(np.where(np.all(data == missing_data[i],
             axis=1)), missing_idxs)
         order = np.insert(order, insert_idx, match_idxs)
