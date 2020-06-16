@@ -6,13 +6,13 @@ from numpy.random import default_rng as rng
 np.set_printoptions(precision=2, suppress=True)
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--rows', type=int, required=True)
-parser.add_argument('--alph', type=int, required=True)
+parser.add_argument('-r', type=int, required=True)
+parser.add_argument('-a', type=int, required=True)
 args = parser.parse_args()
 
 N_COLS = 1
-N_ROWS = args.rows
-ALPH_SIZE = args.alph
+N_ROWS = args.r
+ALPH_SIZE = args.a
 
 # Generate alphas and alphabet size for each column
 # ALPH_SIZE = np.zeros((N_COLS), dtype=np.uint)
