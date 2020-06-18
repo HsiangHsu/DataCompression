@@ -1,4 +1,5 @@
 import argparse
+import pandas as pd
 import numpy as np
 from numpy.random import default_rng as rng
 
@@ -25,6 +26,9 @@ for col in range(N_COLS):
     draws = rng().multinomial(1, prior, size=(N_ROWS))
     data_col = np.where(draws==1)[1]
     data[:, col] = data_col
+
+shape = data.shape
+data = pd.to_numeric(data.ravel(), downcast='unsigned').reshape(shape)
 
 with open('synthetic_data.np', 'wb') as f:
     np.save(f, data)

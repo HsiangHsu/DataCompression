@@ -63,8 +63,7 @@ def compress(data, element_axis, args):
     compressor = args.comp
 
     if compressor == 'knn-mst':
-        return knn_mst_comp(data, element_axis, args.n_neighbors,
-            args.metric, args.minkowski_p)
+        return knn_mst_comp(data, element_axis, args.metric, args.minkowski_p)
 
 
 def encode(compression, metadata, original_shape, args):

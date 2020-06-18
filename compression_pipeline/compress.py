@@ -38,9 +38,6 @@ pre_group.add_argument('--psz', type=int,
 comp_group = parser.add_argument_group('compressor')
 comp_group.add_argument('--comp', type=str, choices=['knn-mst'],
     help='compressor to use', dest='comp', required=True)
-comp_group.add_argument('--nneigh', type=int,
-    help='number of neighbors for knn-mst',
-    required='knn-mst' in sys.argv, dest='n_neighbors')
 comp_group.add_argument('--metric', type=str,
     help='distance metric for knn-mst', choices=['hamming', 'minkowski'],
     required='knn-mst' in sys.argv, dest='metric')
@@ -96,7 +93,7 @@ full_start = timer()
 start = timer()
 data, labels = load(args.dataset)
 end = timer()
-print(f'load in {timedelta(seconds=end-start)}.\n')
+print(f'\nload in {timedelta(seconds=end-start)}.\n')
 
 # Save the numpy array form of the dataset in order to validate
 # correctness of decompression

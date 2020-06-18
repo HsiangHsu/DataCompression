@@ -1,7 +1,8 @@
 '''
 displayer.py
 
-Short script to display the input and output data for debugging and testing.
+Short script for verifying that the input and output data are the same dataset,
+even if they aren't in the same order.
 '''
 
 import numpy as np
@@ -13,4 +14,6 @@ data_out = np.load('data_out.npy')
 assert data_in.shape == data_out.shape, \
     f'in: {data_in.shape}, out: {data_out.shape}'
 
-print(data_in, '\n\n', data_out, sep='')
+assert data_in.sort() == data_out.sort(), \
+    'data_in and data_out differ'
+

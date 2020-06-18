@@ -5,8 +5,9 @@ This module contains the Delta-Huffman encoder
 '''
 
 from bitstring import BitArray
+from copy import deepcopy
 from heapq import heappush, heappop, heapify
-from math import ceil
+from math import ceil, log2
 import numpy as np
 import pickle
 
@@ -59,9 +60,20 @@ def delta_huffman_enc(compression, metadata, original_shape, args):
     metastream += len(original_shape).to_bytes(1, 'little')
     for i in range(len(original_shape)):
         metastream += original_shape[i].to_bytes(4, 'little')
-    metastream += metadata.tobytes()
+
+    # Assuming metadata is an inverse ordering, if there is only one layer,
+    # then the inverse orders are not needed to reconstruct the data. Add an
+    # indicator byte to let the decoder know whether or not data should be
+    # reordered.
+    if n_layers == 1:
+        metastream += (0).to_bytes(1, 'little')
+    else:
+        metastream += (1).to_bytes(1, 'little')
+        metastream += metadata.tobytes()
 
     f = open('comp.out', 'wb')
+    metalen = len(metastream)
+    print(f'\tMetastream: {metalen} bytes')
     f.write(metastream)
 
     for i in range(n_layers):
@@ -71,9 +83,20 @@ def delta_huffman_enc(compression, metadata, original_shape, args):
 
         # Generate Huffman code for deltas on this layer
         freqs = get_freqs(deltas.flatten())
-        code = huffman_encode(freqs)
-        codestream = pickle.dumps(code)
+        raw_code = huffman_encode(freqs)
+        code = dict(raw_code)
+        symbol_len = deltas.dtype.itemsize
+        max_code_len = len(max(raw_code, key=lambda c: len(c[1]))[1])
+        code_len = ceil(max_code_len/8)
+        codestream = b''
+        for symbol in raw_code:
+            codestream += int(symbol[0]).to_bytes(symbol_len, 'little')
+            codestream += len(symbol[1]).to_bytes(code_len, 'little')
+        codelen = len(codestream)+6
+        print(f'\tCodestream: {codelen} bytes, {len(raw_code)} symbols')
         f.write(len(codestream).to_bytes(4, 'little'))
+        f.write(symbol_len.to_bytes(1, 'little'))
+        f.write(code_len.to_bytes(1, 'little'))
         f.write(codestream)
 
         # Generate Huffman coded bitstream for data on this layer
@@ -87,10 +110,16 @@ def delta_huffman_enc(compression, metadata, original_shape, args):
             for j in range(len(bitstream)//8)]
 
         # The first element is not Huffman coded because it is not a delta
+        bytestreamlen = len(bytestream)+5
+        print(f'\tBytestream: {bytestreamlen} bytes')
         f.write(len(bytestream).to_bytes(4, 'little'))
         f.write(padding.to_bytes(1, 'little'))
         f.write(bytes(bytestream))
+        firstlen = len(compression[i][0].tobytes())
+        print(f'\tFirst element: {firstlen} bytes')
         f.write(compression[i][0].tobytes())
+
+        print(f'\tTotal len: {metalen+codelen+bytestreamlen+firstlen}\n')
 
     f.close()
 
@@ -133,16 +162,40 @@ def delta_huffman_dec(comp_file):
     data_size = comp_dtype.itemsize
     meta_size = meta_dtype.itemsize
 
-    compression = np.empty((n_layers, n_elements, n_points), dtype=comp_dtype)
-    metadata = np.empty((n_layers, n_elements), dtype=meta_dtype)
+    meta_included = readint(f, 1)
 
-    for i in range(n_layers):
-        for j in range(n_elements):
-            metadata[i][j] = readint(f, meta_size)
+    if meta_included:
+        metadata = np.empty((n_layers, n_elements), dtype=meta_dtype)
+        for i in range(n_layers):
+            for j in range(n_elements):
+                metadata[i][j] = readint(f, meta_size)
+    else:
+        metadata = None
+
+    compression = np.empty((n_layers, n_elements, n_points), dtype=comp_dtype)
 
     for i in range(n_layers):
         codestream_len = readint(f, 4)
-        code = pickle.loads(f.read(codestream_len))
+        symbol_len = readint(f, 1)
+        code_len = readint(f, 1)
+
+        # Reconstruct Huffman code
+        codebytes_read = 0
+        raw_code = []
+        while codebytes_read < codestream_len:
+            raw_code.append([readint(f, symbol_len), readint(f, code_len)])
+            codebytes_read += symbol_len + code_len
+        reconstructed_code = deepcopy(raw_code)
+        codelen = raw_code[0][1]
+        code = f'{0:0{codelen}b}'
+        reconstructed_code[0][1] = code
+        for k in range(1, len(raw_code)):
+            codelen = raw_code[k][1]
+            code = int(code, 2) + 1
+            code = code << (codelen - raw_code[k-1][1])
+            code = f'{code:0{codelen}b}'
+            reconstructed_code[k][1] = code
+
         bytestream_len = readint(f, 4)
         padding_bits = readint(f, 1)
         bitstream_len = bytestream_len*8 - padding_bits
@@ -157,7 +210,7 @@ def delta_huffman_dec(comp_file):
                 compression[i][j] = compression[i][0]
             continue
 
-        decodings = {v: k for k, v in code.items()}
+        decodings = {v: k for k, v in dict(reconstructed_code).items()}
         decoded_stream = huffman_decode(bytestream, bitstream_len, decodings)
         deltas = np.array(decoded_stream, dtype=comp_dtype)
         deltas = deltas.reshape(n_elements-1, n_points)
@@ -179,7 +232,20 @@ def huffman_encode(symb2freq):
         for pair in hi[1:]:
             pair[1] = '1' + pair[1]
         heappush(heap, [lo[0] + hi[0]] + lo[1:] + hi[1:])
-    return dict(sorted(heappop(heap)[1:], key=lambda p: (len(p[-1]), p)))
+    non_canonical = sorted(heappop(heap)[1:], key=lambda p: (len(p[-1]), p))
+
+    canonical = deepcopy(non_canonical)
+    codelen = len(non_canonical[0][1])
+    code = f'{0:0{codelen}b}'
+    canonical[0][1] = code
+    for i in range(1, len(non_canonical)):
+        codelen = len(non_canonical[i][1])
+        code = int(code, 2) + 1
+        code = code << (codelen - len(non_canonical[i-1][1]))
+        code = f'{code:0{codelen}b}'
+        canonical[i][1] = code
+
+    return canonical
 
 
 def huffman_decode(bytestream, length, decodings):
