@@ -6,7 +6,7 @@ This module contains helper functions for implementing the KNN-MST compressor.
 
 import numpy as np
 from scipy.sparse.csgraph import depth_first_tree, depth_first_order, \
-    minimum_spanning_tree
+    minimum_spanning_tree, connected_components
 from sklearn.neighbors import kneighbors_graph
 
 from datetime import timedelta
@@ -15,7 +15,7 @@ from timeit import default_timer as timer
 from utilities import find_dtype
 
 
-def knn_mst_comp(data, element_axis, n_neighbors, metric, minkowski_p):
+def knn_mst_comp(data, element_axis, metric, minkowski_p):
     '''
     K Nearest Neighbors and Minimum Spanning Tree compressor
 
@@ -28,8 +28,6 @@ def knn_mst_comp(data, element_axis, n_neighbors, metric, minkowski_p):
             data to be compressed
         element_axis: int
             axis of data that whose length is the number of elements
-        n_neighbors: int
-            number of neighbors used to build KNN graph
         metric: string
             distance metric used to build KNN graph
         minkowski_p: int
@@ -61,22 +59,25 @@ def knn_mst_comp(data, element_axis, n_neighbors, metric, minkowski_p):
         print(f'\tLayer {i}:')
         start = timer()
 
+
         # Builds a separate KNN graph and MST for each patch on each layer
-        knn_graph = kneighbors_graph(data[i], n_neighbors=n_neighbors,
+        unique_data, unique_indices = np.unique(data[i], axis=0,
+            return_index=True)
+        knn_graph = kneighbors_graph(unique_data, unique_data.size-1,
             metric=metric, p=minkowski_p, mode='distance', n_jobs=-1)
 
         end = timer()
         print(f'\tknn_graph in {timedelta(seconds=end-start)}.')
         start = timer()
 
-        ### TODO overwrite=True
-        mst = minimum_spanning_tree(knn_graph, overwrite=False)
+        mst = minimum_spanning_tree(knn_graph, overwrite=True)
 
         end = timer()
         print(f'\tmst in {timedelta(seconds=end-start)}.')
         start = timer()
 
-        ordered_data[i], order = generate_order(data[i], n_elements, mst)
+        ordered_data[i], order = generate_order(data[i], n_elements, mst,
+            unique_indices)
         inverse_orders[i] = np.arange(len(order))[np.argsort(order)]
 
         end = timer()
@@ -107,62 +108,32 @@ def knn_mst_decomp(compression, inverse_orders, original_shape):
 
     n_layers = compression.shape[0]
 
-    for i in range(n_layers):
-        compression[i] = compression[i][inverse_orders[i]]
+    if inverse_orders:
+        for i in range(n_layers):
+            compression[i] = compression[i][inverse_orders[i]]
 
     compression = compression.reshape(original_shape)
 
     return compression
 
 
-def generate_order(data, n_elements, mst):
-    nonzero = np.unique(np.array(mst.nonzero()).ravel())
-    if len(nonzero) == 0:
-        return np.empty(0, np.uint32)
+def generate_order(data, n_elements, mst, unique_indices):
+    mst_indices = np.unique(np.array(mst.nonzero()).ravel())
+    order = np.empty(0, np.uint32)
 
-    min_total_distance = np.inf
-    min_order = np.empty(0, np.uint32)
+    if len(mst_indices) == 0:
+        order = pad_order(order, n_elements, data)
+        return data[order], order
 
-    for i in range(nonzero.size):
-        # print()
-        nonzero = np.unique(np.array(mst.nonzero()).ravel())
-        nnz_shortened = False
-        order = np.empty(0, np.uint32)
-        edges_traversed = 0
-        while True:
-            # print("nnz: ", nonzero)
-            if nnz_shortened:
-                start_idx = nonzero[0]
-            else:
-                start_idx = nonzero[i]
-            df_tree = depth_first_tree(mst, start_idx, directed=False)
-            edges_traversed += df_tree.nnz
-            order = np.append(order, depth_first_order(df_tree, start_idx,
-                return_predecessors=False))
-            if edges_traversed == mst.nnz:
-                order = pad_order(order, n_elements, data)
-                # print("order:\n", data[order])
-                if len(order) < n_elements:
-                    break
-                total_distance = np.sum(np.abs(np.diff(
-                    data[order].astype(np.int), axis=0)))
-                # print("total_dist: ", total_distance)
-                if total_distance < min_total_distance:
-                    min_total_distance = total_distance
-                    min_order = order
-                break
-            else:
-                nonzero = np.setdiff1d(nonzero, order)
-                nnz_shortened = True
+    start_idx = mst_indices[0]
+    dft = depth_first_tree(mst, start_idx, directed=False)
+    order = np.append(order, depth_first_order(dft, start_idx,
+        return_predecessors=False))
+    assert dft.nnz == mst.nnz
+    order = pad_order(unique_indices[order], n_elements, data)
+    assert len(order) == n_elements
 
-    assert min_order.size == n_elements, \
-        "\nfailed to create full order -- try increasing nneigh\n"
-
-    # print('\n\n\n')
-    print(data[min_order])
-    # print(min_total_distance)
-
-    return data[min_order], min_order
+    return data[order], order
 
 def pad_order(order, n, data):
     missing_idxs = np.setdiff1d(np.arange(n), order)

@@ -1,1 +1,1 @@
-diff data_in.npy data_out.npy
+python3 verifier.py
