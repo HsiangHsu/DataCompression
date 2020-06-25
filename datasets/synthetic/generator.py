@@ -1,10 +1,9 @@
+#!/usr/bin/env python3
+
 import argparse
 import pandas as pd
 import numpy as np
 from numpy.random import default_rng as rng
-
-
-np.set_printoptions(precision=2, suppress=True)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-r', type=int, required=True)
@@ -18,7 +17,6 @@ ALPH_SIZE = args.a
 # Generate alphas and alphabet size for each column
 # ALPH_SIZE = np.zeros((N_COLS), dtype=np.uint)
 alpha = np.full(ALPH_SIZE, 1)
-
 data = np.empty((N_ROWS, N_COLS), dtype=np.uint)
 
 for col in range(N_COLS):
@@ -29,6 +27,7 @@ for col in range(N_COLS):
 
 shape = data.shape
 data = pd.to_numeric(data.ravel(), downcast='unsigned').reshape(shape)
+print(prior)
 
 with open('synthetic_data.np', 'wb') as f:
     np.save(f, data)

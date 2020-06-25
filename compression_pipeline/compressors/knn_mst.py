@@ -59,12 +59,15 @@ def knn_mst_comp(data, element_axis, metric, minkowski_p):
         print(f'\tLayer {i}:')
         start = timer()
 
-
         # Builds a separate KNN graph and MST for each patch on each layer
         unique_data, unique_indices = np.unique(data[i], axis=0,
             return_index=True)
-        knn_graph = kneighbors_graph(unique_data, unique_data.size-1,
+
+        knn_graph = kneighbors_graph(unique_data,
+            min(len(unique_data)-1, 1000),
             metric=metric, p=minkowski_p, mode='distance', n_jobs=-1)
+
+        assert connected_components(knn_graph, directed=False, return_labels=False) == 1
 
         end = timer()
         print(f'\tknn_graph in {timedelta(seconds=end-start)}.')
@@ -78,6 +81,7 @@ def knn_mst_comp(data, element_axis, metric, minkowski_p):
 
         ordered_data[i], order = generate_order(data[i], n_elements, mst,
             unique_indices)
+
         inverse_orders[i] = np.arange(len(order))[np.argsort(order)]
 
         end = timer()
@@ -129,7 +133,7 @@ def generate_order(data, n_elements, mst, unique_indices):
     dft = depth_first_tree(mst, start_idx, directed=False)
     order = np.append(order, depth_first_order(dft, start_idx,
         return_predecessors=False))
-    assert dft.nnz == mst.nnz
+    assert dft.nnz == mst.nnz, f'dft.nnz: {dft.nnz}, mst.nnz: {mst.nnz}'
     order = pad_order(unique_indices[order], n_elements, data)
     assert len(order) == n_elements
 

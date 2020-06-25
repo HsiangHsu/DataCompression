@@ -22,3 +22,6 @@ def get_dataset_path(dataset):
             datapath = f'data_batch_{i}'
             datapaths.append(os.path.join(dirpath, datapath))
         return datapaths
+
+    elif dataset == 'adult':
+        return [os.path.join(dirpath, 'adult.data')]
