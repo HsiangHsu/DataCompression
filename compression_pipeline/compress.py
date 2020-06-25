@@ -26,7 +26,7 @@ parser.add_argument('dataset', type=str, help='dataset to compress',
 
 pre_group = parser.add_argument_group('preprocessor')
 pre_group.add_argument('--pre', type=str,
-    choices=['sqpatch', 'rgb', 'rgb-sqpatch', 'dct'],
+    choices=['sqpatch', 'rgb', 'rgb-sqpatch', 'dict'],
     help='preprocessor to use', dest='pre')
 pre_group.add_argument('--rgb-r', type=int,
     help='rows in rgb data', dest='rgbr')
@@ -37,15 +37,15 @@ pre_group.add_argument('--psz', type=int,
 
 comp_group = parser.add_argument_group('compressor')
 comp_group.add_argument('--comp', type=str, choices=['knn-mst'],
-    help='compressor to use', dest='comp', required=True)
+    help='compressor to use', dest='comp', default='knn-mst')
 comp_group.add_argument('--metric', type=str,
     help='distance metric for knn-mst', choices=['hamming', 'minkowski'],
-    required='knn-mst' in sys.argv, dest='metric')
+    required='knn-mst' in sys.argv, dest='metric', default='minkowski')
 comp_group.add_argument('--minkp', type=int,
     help='parameter for Minkowski metric', dest='minkowski_p', default=2)
 comp_group.add_argument('--enc', type=str,
     choices=['delta-coo', 'delta-huff', 'video'],
-    help='encoder to use', dest='enc', required=True)
+    help='encoder to use', dest='enc', default='delta-huff')
 
 video_enc_group = parser.add_argument_group('video encoding')
 valid_intermediate_frame_codecs = ['jpg', 'png']
