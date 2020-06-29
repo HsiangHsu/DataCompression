@@ -101,14 +101,15 @@ np.save('data_in', data)
 
 start = timer()
 if args.pre:
-    data, element_axis = preprocess(data, args)
+    data, element_axis, pre_metadata = preprocess(data, args)
 else:
     element_axis = 0
+    pre_metadata = None
 end = timer()
 print(f'preprocess in {timedelta(seconds=end-start)}.\n')
 
 start = timer()
-compressed_data, local_metadata, original_shape = compress(data, element_axis,
+compressed_data, comp_metadata, original_shape = compress(data, element_axis,
     args)
 end = timer()
 print(f'compress in {timedelta(seconds=end-start)}.\n')
@@ -120,7 +121,7 @@ if args.video_codec:
         args.grayscale = False
 
 start = timer()
-encode(compressed_data, local_metadata, original_shape, args)
+encode(compressed_data, pre_metadata, comp_metadata, original_shape, args)
 end = timer()
 print(f'encode in {timedelta(seconds=end-start)}.\n')
 

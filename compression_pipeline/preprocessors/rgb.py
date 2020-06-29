@@ -27,6 +27,7 @@ def rgb_pre(data, rows, cols):
             (3, n_elements, rows, cols)
         element_axis: int
             index into data.shape for n_elements
+        metadata: None
     '''
 
     assert len(data.shape) == 2, f'invalid shape for RGB data: {data.shape}'
@@ -36,7 +37,7 @@ def rgb_pre(data, rows, cols):
     data = data.reshape(n_elements, 3, rows, cols)
     rgb_data = data.swapaxes(0, 1)
 
-    return rgb_data, 1
+    return rgb_data, 1, None
 
 
 def rgb_post(decomp):

@@ -27,6 +27,7 @@ def sqpatch_pre(data, patch_sz):
             (n_layers, n_patches, n_elements, patch_sz**2)
         element_axis: int
             index into data.shape for n_elements
+        metadata: None
     '''
 
     assert data.shape[-1] == data.shape[-2], 'elements must be square'
@@ -56,7 +57,7 @@ def sqpatch_pre(data, patch_sz):
         patch_sz**2)
 
     # after preprocesssing, element_axis = 2
-    return patched_data, 2
+    return patched_data, 2, None
 
 
 def sqpatch_post(decomp):

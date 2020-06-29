@@ -1,7 +1,6 @@
 from preprocessors.sqpatch import sqpatch_pre, sqpatch_post
 from preprocessors.rgb import rgb_pre, rgb_post
-from preprocessors.dct import dct_pre, dct_post
-from preprocessors.dict import dict_pre
+from preprocessors.dict import dict_pre, dict_post
 
 from compressors.knn_mst import knn_mst_comp, knn_mst_decomp
 
@@ -25,6 +24,8 @@ def preprocess(data, args):
             preprocessed data
         element_axis: int
             index into data.shape for n_elements
+        pre_metadata: numpy array
+            metadata for preprocessing
     '''
 
     preprocessor = args.pre
@@ -34,7 +35,7 @@ def preprocess(data, args):
     elif preprocessor == 'rgb':
         return rgb_pre(data, args.rgbr, args.rgbc)
     elif preprocessor == 'rgb-sqpatch':
-        rgb_data, _ = rgb_pre(data, args.rgbr, args.rgbc)
+        rgb_data, _, _ = rgb_pre(data, args.rgbr, args.rgbc)
         return sqpatch_pre(rgb_data, args.psz)
     elif preprocessor == 'dict':
         return dict_pre(data)
@@ -55,8 +56,8 @@ def compress(data, element_axis, args):
     Returns:
         compressed_data: numpy array
             compressed data, of shape (n_layers, n_elements, n_points)
-        metadata: numpy array
-            metadata corresponding to each layer in the compression
+        comp_metadata: numpy array
+            metadata for compression
         original_shape: tuple
             shape of original data
     '''
@@ -67,7 +68,7 @@ def compress(data, element_axis, args):
         return knn_mst_comp(data, element_axis, args.metric, args.minkowski_p)
 
 
-def encode(compression, metadata, original_shape, args):
+def encode(compression, pre_metadata, comp_metadata, original_shape, args):
     '''
     Calls the appropriate encoder
 
@@ -76,9 +77,10 @@ def encode(compression, metadata, original_shape, args):
     Args:
         compression: numpy array
             compressed data to be encoded
-        metadata: numpy array
-            metadata for compression (not necessarily the same metadata
-            that is returned by the loader)
+        pre_metadata: numpy array
+            metadata for preprocessing
+        comp_metadata: numpy array
+            metadata for compression
         original_shape: tuple
             shape of original data
         args: Namespace
@@ -91,9 +93,10 @@ def encode(compression, metadata, original_shape, args):
     encoder = args.enc
 
     if encoder == 'delta-coo':
-        delta_coo_enc(compression, metadata, original_shape, args)
+        delta_coo_enc(compression, comp_metadata, original_shape, args)
     elif encoder == 'delta-huff':
-        delta_huffman_enc(compression, metadata, original_shape, args)
+        delta_huffman_enc(compression, pre_metadata, comp_metadata,
+            original_shape, args)
     elif encoder == 'video':
         video_enc(compression, metadata, original_shape, args,
             args.video_codec, args.gop_strat, args.image_codec, args.framerate,
@@ -113,9 +116,12 @@ def decode(comp_file, args):
     Returns:
         decompression: numpy array
             decompressed data
-        metadata: numpy array
-            metadata is for compression (not necessarily the same metadata
-            that is returned by the loader)
+        pre_metadata: numpy array
+            metadata for preprocessing
+        comp_metadata: numpy array
+            metadata for compression
+        original_shape: tuple
+            shape of original data
     '''
 
     decoder = args.enc
@@ -126,7 +132,7 @@ def decode(comp_file, args):
         return delta_huffman_dec(comp_file)
 
 
-def decompress(compression, metadata, original_shape, args):
+def decompress(compression, comp_metadata, original_shape, args):
     '''
     Calls the appropriate decompressor
 
@@ -134,8 +140,7 @@ def decompress(compression, metadata, original_shape, args):
         compression: numpy array
             compressed data
         metadata: numpy array
-            metadata for compression (not necessarily the same metadata
-            that is returned by the loader)
+            metadata for compression
         original_shape: tuple
             shape of original data
         decompressor: string
@@ -149,16 +154,18 @@ def decompress(compression, metadata, original_shape, args):
     decompressor = args.comp
 
     if decompressor == 'knn-mst':
-        return knn_mst_decomp(compression, metadata, original_shape)
+        return knn_mst_decomp(compression, comp_metadata, original_shape)
 
 
-def postprocess(decomp, args):
+def postprocess(decomp, pre_metadata, args):
     '''
     Calls the appropriate postprocessor.
 
     Args:
         decomp: numpy array
             decompressed data
+        pre_metadat: numpy array
+            metadata for preprocessing
         args: Namespace
             command-line argument namespace
 
@@ -175,5 +182,5 @@ def postprocess(decomp, args):
         return rgb_post(decomp)
     elif postprocessor == 'rgb-sqpatch':
         return rgb_post(sqpatch_post(decomp))
-    elif postprocessor == 'dct':
-        return dct_post(decomp)
+    elif postprocessor == 'dict':
+        return dict_post(decomp, pre_metadata)

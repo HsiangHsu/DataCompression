@@ -14,7 +14,8 @@ import pickle
 from utilities import readint
 
 
-def delta_huffman_enc(compression, metadata, original_shape, args):
+def delta_huffman_enc(compression, pre_metadata, comp_metadata, original_shape,
+    args):
     '''
     Delta Vector and Huffman encoder
 
@@ -56,10 +57,19 @@ def delta_huffman_enc(compression, metadata, original_shape, args):
     metastream += n_elements.to_bytes(4, 'little')
     metastream += n_points.to_bytes(4, 'little')
     metastream += ord(compression.dtype.char).to_bytes(1, 'little')
-    metastream += ord(metadata.dtype.char).to_bytes(1, 'little')
     metastream += len(original_shape).to_bytes(1, 'little')
     for i in range(len(original_shape)):
         metastream += original_shape[i].to_bytes(4, 'little')
+
+    if pre_metadata is not None:
+        metastream += (1).to_bytes(1, 'little')
+        metastream += len(pre_metadata.shape).to_bytes(1, 'little')
+        for i in range(len(pre_metadata.shape)):
+            metastream += pre_metadata.shape[i].to_bytes(4, 'little')
+        metastream += ord(pre_metadata.dtype.char).to_bytes(1, 'little')
+        metastream += pre_metadata.tobytes()
+    else:
+        metastream += (0).to_bytes(1, 'little')
 
     # Assuming metadata is an inverse ordering, if there is only one layer,
     # then the inverse orders are not needed to reconstruct the data. Add an
@@ -69,7 +79,8 @@ def delta_huffman_enc(compression, metadata, original_shape, args):
         metastream += (0).to_bytes(1, 'little')
     else:
         metastream += (1).to_bytes(1, 'little')
-        metastream += metadata.tobytes()
+        metastream += ord(comp_metadata.dtype.char).to_bytes(1, 'little')
+        metastream += comp_metadata.tobytes()
 
     f = open('comp.out', 'wb')
     metalen = len(metastream)
@@ -140,7 +151,9 @@ def delta_huffman_dec(comp_file):
     Returns:
         compression: numpy array
             compressed data
-        metadata: numpy array
+        pre_metadata: numpy array
+            metadata for preprocessing
+        comp_metadata: numpy array
             metadata for compression
         original_shape: tuple
             shape of original data
@@ -152,7 +165,6 @@ def delta_huffman_dec(comp_file):
     n_elements = readint(f, 4)
     n_points = readint(f, 4)
     comp_dtype = np.dtype(chr(readint(f, 1)))
-    meta_dtype = np.dtype(chr(readint(f, 1)))
     original_shape_len = readint(f, 1)
     shape_values = []
     for i in range(original_shape_len):
@@ -160,17 +172,33 @@ def delta_huffman_dec(comp_file):
     original_shape = tuple(shape_values)
 
     data_size = comp_dtype.itemsize
-    meta_size = meta_dtype.itemsize
 
-    meta_included = readint(f, 1)
+    pre_meta_included = readint(f, 1)
+    if pre_meta_included:
+        pre_meta_shape_len = readint(f, 1)
+        pre_meta_shape_values = []
+        for i in range(pre_meta_shape_len):
+            pre_meta_shape_values.append(readint(f, 4))
+        pre_meta_shape = tuple(pre_meta_shape_values)
+        pre_meta_dtype = np.dtype(chr(readint(f, 1)))
+        pre_meta_size = pre_meta_dtype.itemsize
+        pre_metadata = np.empty(np.prod(pre_meta_shape), dtype=pre_meta_dtype)
+        for i in range(np.prod(pre_meta_shape)):
+            pre_metadata[i] = readint(f, pre_meta_size)
+        pre_metadata = pre_metadata.reshape(pre_meta_shape)
+    else:
+        pre_metadata = None
 
-    if meta_included:
-        metadata = np.empty((n_layers, n_elements), dtype=meta_dtype)
+    comp_meta_included = readint(f, 1)
+    if comp_meta_included:
+        comp_meta_dtype = np.dtype(chr(readint(f, 1)))
+        comp_meta_size = comp_meta_dtype.itemsize
+        comp_metadata = np.empty((n_layers, n_elements), dtype=comp_meta_dtype)
         for i in range(n_layers):
             for j in range(n_elements):
-                metadata[i][j] = readint(f, meta_size)
+                metadata[i][j] = readint(f, comp_meta_size)
     else:
-        metadata = None
+        comp_metadata = None
 
     compression = np.empty((n_layers, n_elements, n_points), dtype=comp_dtype)
 
@@ -218,7 +246,7 @@ def delta_huffman_dec(comp_file):
         for j in range(1, n_elements):
             compression[i][j] = compression[i][j-1] + deltas[j-1]
 
-    return compression, metadata, original_shape
+    return compression, pre_metadata, comp_metadata, original_shape
 
 
 def huffman_encode(symb2freq):

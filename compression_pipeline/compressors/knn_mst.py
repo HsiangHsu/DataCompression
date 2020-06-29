@@ -67,7 +67,8 @@ def knn_mst_comp(data, element_axis, metric, minkowski_p):
             min(len(unique_data)-1, 1000),
             metric=metric, p=minkowski_p, mode='distance', n_jobs=-1)
 
-        assert connected_components(knn_graph, directed=False, return_labels=False) == 1
+        assert connected_components(knn_graph, directed=False, \
+            return_labels=False) == 1
 
         end = timer()
         print(f'\tknn_graph in {timedelta(seconds=end-start)}.')
