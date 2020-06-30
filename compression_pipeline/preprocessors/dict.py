@@ -38,12 +38,14 @@ def dict_pre(data):
     data = data.reshape(data.shape[0], -1)
 
     start = timer()
-    code, dictionary = dict_learning_online(data, n_components=data.shape[0],
-        n_iter=50, return_code=True, batch_size=10, random_state=1,
+    code, dictionary = dict_learning_online(data, n_components=data.shape[1],
+        n_iter=25, return_code=True, batch_size=10, random_state=1,
         dict_init=None, positive_dict=True, positive_code=True, method='cd',
-        verbose=True)
+        verbose=0, method_max_iter=1000)
     code = code.astype(np.uint32)
     end = timer()
+    np.save('code', code)
+    np.save('dictionary', dictionary)
     print(f'\n\tlearn dictionary in {timedelta(seconds=end-start)}.\n')
 
     expected_data = np.matmul(code, dictionary).astype(np.uint8)
