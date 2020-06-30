@@ -6,7 +6,7 @@ This module contains the Dictionary Learning preprocessor.
 
 import numpy as np
 from sklearn.decomposition import DictionaryLearning, \
-    MiniBatchDictionaryLearning
+    MiniBatchDictionaryLearning, dict_learning_online
 
 from datetime import timedelta
 from timeit import default_timer as timer
@@ -36,28 +36,31 @@ def dict_pre(data):
     data = data.reshape(data.shape[0], -1)
 
     start = timer()
-    dico = MiniBatchDictionaryLearning(n_iter=10, n_components=10, random_state=1)
-    dico.fit(data)
-    atoms = dico.components_
+    # dico = MiniBatchDictionaryLearning(n_iter=100, n_components=784, random_state=1)
+    # dico.fit(data)
+    # atoms = dico.components_
+    code, dictionary = dict_learning_online(data, n_components=784, n_iter=100,
+        return_code=True, batch_size=3, random_state=1)
     end = timer()
     print(f'\tlearn dictionary in {timedelta(seconds=end-start)}.')
 
-    start = timer()
-    transform = dico.transform(data).astype(np.uint16)
-    end = timer()
-    print(f'\ttransform data in {timedelta(seconds=end-start)}.\n')
+    # start = timer()
+    # transform = dico.transform(data).astype(np.uint16)
+    # end = timer()
+    # print(f'\ttransform data in {timedelta(seconds=end-start)}.\n')
 
     ###
-    post_data = np.zeros((data.shape[0], atoms.shape[1]),
+    print(code.shape, dictionary.shape)
+    post_data = np.zeros((data.shape[0], dictionary.shape[1]),
         dtype=np.float64)
 
-    for i in range(post_data.shape[0]):
-        post_data[i] = np.matmul(transform[i], atoms).astype(np.float64)
+    post_data = np.matmul(code, dictionary)
 
     from matplotlib import pyplot as plt
 
+    plt.subplot(121)
     plt.imshow(data[0].reshape((28,28)))
-    plt.show()
+    plt.subplot(122)
     plt.imshow(post_data[0].astype(np.uint8).reshape((28,28)))
     plt.show()
 
