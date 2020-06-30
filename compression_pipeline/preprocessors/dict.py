@@ -6,10 +6,12 @@ This module contains the Dictionary Learning preprocessor.
 
 import numpy as np
 from sklearn.decomposition import DictionaryLearning, \
-    MiniBatchDictionaryLearning, dict_learning_online
+    MiniBatchDictionaryLearning, dict_learning_online, dict_learning
 
 from datetime import timedelta
 from timeit import default_timer as timer
+
+from matplotlib import pyplot as plt
 
 
 def dict_pre(data):
@@ -29,46 +31,32 @@ def dict_pre(data):
             (n_elements, n_components)
         element_axis: int
             index into transform.shape for n_elements
-        atoms: numpy array
+        dictionary: numpy array
             learned dictionary, of shape (n_components, n_points)
     '''
 
     data = data.reshape(data.shape[0], -1)
 
     start = timer()
-    # dico = MiniBatchDictionaryLearning(n_iter=100, n_components=784, random_state=1)
-    # dico.fit(data)
-    # atoms = dico.components_
-    code, dictionary = dict_learning_online(data, n_components=784, n_iter=100,
-        return_code=True, batch_size=3, random_state=1)
+    code, dictionary = dict_learning_online(data, n_components=data.shape[0],
+        n_iter=50, return_code=True, batch_size=10, random_state=1,
+        dict_init=None, positive_dict=True, positive_code=True, method='cd',
+        verbose=True)
+    code = code.astype(np.uint32)
     end = timer()
-    print(f'\tlearn dictionary in {timedelta(seconds=end-start)}.')
+    print(f'\n\tlearn dictionary in {timedelta(seconds=end-start)}.\n')
 
-    # start = timer()
-    # transform = dico.transform(data).astype(np.uint16)
-    # end = timer()
-    # print(f'\ttransform data in {timedelta(seconds=end-start)}.\n')
+    expected_data = np.matmul(code, dictionary).astype(np.uint8)
+    np.save('udata_in', expected_data)
 
-    ###
-    print(code.shape, dictionary.shape)
-    post_data = np.zeros((data.shape[0], dictionary.shape[1]),
-        dtype=np.float64)
+    # expected_data = expected_data.reshape((data.shape[0],28,28))
+    # data = data.reshape((data.shape[0],28,28))
+    # for i in range(len(expected_data)):
+    #     plt.subplot(2, 5, i+1)
+    #     plt.imshow(expected_data[i])
+    # plt.show()
 
-    post_data = np.matmul(code, dictionary)
-
-    from matplotlib import pyplot as plt
-
-    plt.subplot(121)
-    plt.imshow(data[0].reshape((28,28)))
-    plt.subplot(122)
-    plt.imshow(post_data[0].astype(np.uint8).reshape((28,28)))
-    plt.show()
-
-    exit()
-    np.save('udata_in', post_data)
-    ###
-
-    return transform, 0, atoms
+    return code, 0, dictionary
 
 
 def dict_post(decomp, pre_metadata):
@@ -88,10 +76,12 @@ def dict_post(decomp, pre_metadata):
             postprocessed data, of shape
     '''
 
-    post_data = np.zeros((decomp.shape[0], pre_metadata.shape[1]),
-        dtype=decomp.dtype)
+    post_data = np.matmul(decomp, pre_metadata).astype(np.uint8)
 
-    for i in range(post_data.shape[0]):
-        post_data[i]  = np.matmul(decomp[i], pre_metadata).astype(post_data.dtype)
+    # data = post_data.reshape((post_data.shape[0],28,28))
+    # for i in range(len(data)):
+    #     plt.subplot(2, 5, i+1)
+    #     plt.imshow(data[i])
+    # plt.show()
 
     return post_data

@@ -182,9 +182,8 @@ def delta_huffman_dec(comp_file):
         pre_meta_shape = tuple(pre_meta_shape_values)
         pre_meta_dtype = np.dtype(chr(readint(f, 1)))
         pre_meta_size = pre_meta_dtype.itemsize
-        pre_metadata = np.empty(np.prod(pre_meta_shape), dtype=pre_meta_dtype)
-        for i in range(np.prod(pre_meta_shape)):
-            pre_metadata[i] = readint(f, pre_meta_size)
+        to_read = np.prod(pre_meta_shape) * pre_meta_dtype.itemsize
+        pre_metadata = np.frombuffer(f.read(to_read), dtype=pre_meta_dtype)
         pre_metadata = pre_metadata.reshape(pre_meta_shape)
     else:
         pre_metadata = None
