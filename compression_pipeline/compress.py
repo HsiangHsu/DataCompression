@@ -115,8 +115,6 @@ else:
 end = timer()
 print(f'preprocess in {timedelta(seconds=end-start)}.\n')
 
-exit()
-
 start = timer()
 compressed_data, comp_metadata, original_shape = compress(data, element_axis,
     args)
