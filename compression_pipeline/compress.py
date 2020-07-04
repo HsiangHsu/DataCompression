@@ -34,6 +34,14 @@ pre_group.add_argument('--rgb-c', type=int,
     help='cols of rgb data', dest='rgbc')
 pre_group.add_argument('--psz', type=int,
     help='dimension of cropped patch for sqpatch')
+pre_group.add_argument('--nc', type=int, default=100,
+    help='n_components')
+pre_group.add_argument('--alpha', type=float, default=1,
+    help='regularization parameter')
+pre_group.add_argument('--niter', type=int, default=100,
+    help='number of mini-batch iterations')
+pre_group.add_argument('--bsz', type=int, default=10,
+    help='mini-batch size')
 
 comp_group = parser.add_argument_group('compressor')
 comp_group.add_argument('--comp', type=str, choices=['knn-mst'],
@@ -86,7 +94,6 @@ if (args.pre == 'sqpatch' or args.pre == 'rgb-sqpatch') and not args.psz:
 if (args.pre == 'rgb' or args.pre == 'rgb-sqpatch') and \
     (not (args.rgbr and args.rgbc)):
     parser.error('must supply --rgb-r and --rgb-c for rgb')
-
 
 full_start = timer()
 

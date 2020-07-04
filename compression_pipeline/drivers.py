@@ -38,7 +38,7 @@ def preprocess(data, args):
         rgb_data, _, _ = rgb_pre(data, args.rgbr, args.rgbc)
         return sqpatch_pre(rgb_data, args.psz)
     elif preprocessor == 'dict':
-        return dict_pre(data)
+        return dict_pre(data, args.nc, args.alpha, args.niter, args.bsz)
 
 
 def compress(data, element_axis, args):
