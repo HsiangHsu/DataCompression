@@ -3,6 +3,7 @@ from preprocessors.rgb import rgb_pre, rgb_post
 from preprocessors.dict import dict_pre, dict_post
 
 from compressors.knn_mst import knn_mst_comp, knn_mst_decomp
+from compressors.knn_hamiltonian import knn_hamiltonian_comp
 
 from encoders.delta_coo import delta_coo_enc, delta_coo_dec
 from encoders.delta_huffman import delta_huffman_enc, delta_huffman_dec
@@ -66,6 +67,8 @@ def compress(data, element_axis, args):
 
     if compressor == 'knn-mst':
         return knn_mst_comp(data, element_axis, args.metric, args.minkowski_p)
+    elif compressor == 'knn-hamiltonian':
+        return knn_hamiltonian_comp(data, args.k)
 
 
 def encode(compression, pre_metadata, comp_metadata, original_shape, args):

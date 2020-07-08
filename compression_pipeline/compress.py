@@ -44,13 +44,16 @@ pre_group.add_argument('--bsz', type=int, default=10,
     help='mini-batch size')
 
 comp_group = parser.add_argument_group('compressor')
-comp_group.add_argument('--comp', type=str, choices=['knn-mst'],
+comp_group.add_argument('--comp', type=str, choices=['knn-mst', 'knn-hamiltonian'],
     help='compressor to use', dest='comp', default='knn-mst')
 comp_group.add_argument('--metric', type=str,
     help='distance metric for knn-mst', choices=['hamming', 'minkowski'],
     required='knn-mst' in sys.argv, dest='metric', default='minkowski')
 comp_group.add_argument('--minkp', type=int,
     help='parameter for Minkowski metric', dest='minkowski_p', default=2)
+comp_group.add_argument('--k', type=int,
+    help='distance metric for knn-hamiltonian', 
+    required='knn-hamiltonian' in sys.argv, dest='k', default=100)
 comp_group.add_argument('--enc', type=str,
     choices=['delta-coo', 'delta-huff', 'video'],
     help='encoder to use', dest='enc', default='delta-huff')
