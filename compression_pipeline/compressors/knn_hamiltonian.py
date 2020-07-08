@@ -15,6 +15,8 @@ from timeit import default_timer as timer
 
 from utilities import find_dtype
 from Christofides import christofides
+import networkx as nx
+import itertools
 
 
 def knn_hamiltonian_comp(data, k):
@@ -38,21 +40,37 @@ def knn_hamiltonian_comp(data, k):
     # Cast to a signed type to avoid overflow when taking distances
     data = data.reshape((*data.shape[:2], -1))[0].astype('int16')
     
-    x_src = data[np.random.choice(data.shape[0])]
-    x_target = data[np.argmax(np.linalg.norm(x_src - data, axis=1))]
-    print("x_target is %05f from x_src" % np.linalg.norm(x_target - x_src))
-    while len(data) > 0:
-        knn = NearestNeighbors(n_neighbors=k, algorithm='auto', metric='euclidean', n_jobs=-1).fit(data)
-        neighbor_inds = knn.kneighbors(np.array([x_src]), return_distance=False).flatten().astype('int')
-        k_nearest = np.array([data[i] for i in neighbor_inds])  # includes |x_src|
-        x_end = k_nearest[np.argmin(np.linalg.norm(x_target - k_nearest, ord=2, axis=1))]
+    src_index = np.random.choice(data.shape[0])
+    print("src_index=", src_index)
+    x_src = data[src_index]
+    
+    knn = NearestNeighbors(n_neighbors=k, algorithm='auto', metric='euclidean', n_jobs=-1).fit(data)
+    knn_graph = knn.kneighbors_graph(n_neighbors=k-1, mode='distance')
 
-        K = NearestNeighbors(n_neighbors=k, algorithm='auto', metric='euclidean', n_jobs=-1).fit(k_nearest)
-        complete_subgraph = K.kneighbors_graph(n_neighbors=k-1, mode='distance').toarray()
-        complete_subgraph = np.triu(complete_subgraph)
-        TSP = christofides.compute(complete_subgraph)
-        order += TSP['Christofides_Solution']
-        
+    assert connected_components(knn_graph, directed=False, return_labels=False) == 1, "KNN is not connected; increase k"
+
+    mst = christofides._csr_gen_triples(minimum_spanning_tree(knn_graph, overwrite=True))
+    odd_vertices = christofides._odd_vertices_of_MST(mst, n_elements)
+
+    # Fill in edge weights we need
+    bipartite_set = [set(i) for i in itertools.combinations(set(odd_vertices), len(odd_vertices)//2)]
+    for vertex_set1 in bipartite_set:
+        vertex_set1 = list(sorted(vertex_set1))
+        vertex_set2 = []
+        for vertex in odd_vertices:
+            if vertex not in vertex_set1:
+                vertex_set2.append(vertex)
+        matrix = [[np.inf for j in range(len(vertex_set2))] for i in range(len(vertex_set1))]
+        for i in range(len(vertex_set1)):
+            for j in range(len(vertex_set2)):
+                weight = np.linalg.norm(data[vertex_set1[i]] - data[vertex_set2[j]], ord=2)
+                mst.add_edge(i, j, weight=weight)
+    print("finished filling edge weights we need, time for christofides")
+    # TODO make compute_from_mst more efficient to take in bipartite graphs since we've already partially computed
+    TSP = christofides.compute_from_mst(None, mst, odd_vertices=odd_vertices)
+    order += TSP['Christofides_Solution']
+    print(order)
+    
 
 
 
