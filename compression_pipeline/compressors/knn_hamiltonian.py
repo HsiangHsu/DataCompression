@@ -14,14 +14,14 @@ from datetime import timedelta
 from timeit import default_timer as timer
 
 from utilities import find_dtype
-from Christofides import christofides
+from networkx.algorithms.bipartite.matching import minimum_weight_full_matching
 import networkx as nx
 import itertools
 
 
 def knn_hamiltonian_comp(data, k):
     '''
-    K Nearest Neighbors and Hamiltonian compressor
+    K Nearest Neighbors and Hamiltonian compressor (using Christofides' approximation)
 
     Args:
         data: numpy array
@@ -31,17 +31,21 @@ def knn_hamiltonian_comp(data, k):
     Returns:
         order: numpy array
             permutation of original |data|
+        inverse_orders: numpy array
+            array of inverse permutations that returns the ordered data to
+            the original dataset order, of shape (1, n_elements)
+        original_shape: tuple
+            shape of original data
     '''
     assert k < len(data), "K neighbors must be less than number of points"
-    order = []
     original_shape = data.shape
+    original_dtype = data.dtype
     n_elements = data.shape[0]
-    data = data.reshape((-1, *data.shape[0:]))
+
     # Cast to a signed type to avoid overflow when taking distances
-    data = data.reshape((*data.shape[:2], -1))[0].astype('int16')
-    
+    data = data.reshape(n_elements, -1).astype('int16')
+
     src_index = np.random.choice(data.shape[0])
-    print("src_index=", src_index)
     x_src = data[src_index]
     
     knn = NearestNeighbors(n_neighbors=k, algorithm='auto', metric='euclidean', n_jobs=-1).fit(data)
@@ -49,27 +53,37 @@ def knn_hamiltonian_comp(data, k):
 
     assert connected_components(knn_graph, directed=False, return_labels=False) == 1, "KNN is not connected; increase k"
 
-    mst = christofides._csr_gen_triples(minimum_spanning_tree(knn_graph, overwrite=True))
-    odd_vertices = christofides._odd_vertices_of_MST(mst, n_elements)
+    mst_mat = minimum_spanning_tree(knn_graph, overwrite=True)
+    mst = nx.Graph()
+    mat_data, indices, indptr = mst_mat.data, mst_mat.indices, mst_mat.indptr
+    for i in range(mst_mat.shape[0]):
+        for j in range(indptr[i], indptr[i+1]):
+            mst.add_edge(i, indices[j], weight = mat_data[j])   
+    
+    odd_vertices = [i for i in mst.nodes if mst.degree[i] % 2 != 0]
+    odd_degree_subgraph = mst.subgraph(odd_vertices).copy()
+    
+    for u in odd_degree_subgraph.nodes:
+        for v in odd_degree_subgraph.nodes:
+            if u != v:
+                if not odd_degree_subgraph.has_edge(u, v):
+                    odd_degree_subgraph.add_edge(u, v, weight=np.linalg.norm(data[u] - data[v], ord=2))
+    
+    matching = minimum_weight_full_matching(odd_degree_subgraph)
+    added_edges = []
+    multigraph = nx.MultiGraph(incoming_graph_data=mst)
+    for pair in matching:
+        if (pair, matching[pair]) not in added_edges and (matching[pair], pair) not in added_edges:
+            multigraph.add_edge(pair, matching[pair],weight=odd_degree_subgraph[pair][matching[pair]])
+            added_edges.append((pair, matching[pair]))
+    
+    euler_tour = nx.algorithms.euler.eulerian_circuit(multigraph, keys=True)
+    order = []
+    for u,v,k in euler_tour:
+        if u not in order:
+            order.append(u)
 
-    # Fill in edge weights we need
-    bipartite_set = [set(i) for i in itertools.combinations(set(odd_vertices), len(odd_vertices)//2)]
-    for vertex_set1 in bipartite_set:
-        vertex_set1 = list(sorted(vertex_set1))
-        vertex_set2 = []
-        for vertex in odd_vertices:
-            if vertex not in vertex_set1:
-                vertex_set2.append(vertex)
-        matrix = [[np.inf for j in range(len(vertex_set2))] for i in range(len(vertex_set1))]
-        for i in range(len(vertex_set1)):
-            for j in range(len(vertex_set2)):
-                weight = np.linalg.norm(data[vertex_set1[i]] - data[vertex_set2[j]], ord=2)
-                mst.add_edge(i, j, weight=weight)
-    print("finished filling edge weights we need, time for christofides")
-    # TODO make compute_from_mst more efficient to take in bipartite graphs since we've already partially computed
-    TSP = christofides.compute_from_mst(None, mst, odd_vertices=odd_vertices)
-    order += TSP['Christofides_Solution']
-    print(order)
+    return np.array([data[order].astype(original_dtype)]), np.array(order), original_shape
     
 
 
