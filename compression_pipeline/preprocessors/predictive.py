@@ -4,6 +4,7 @@ preprocessors/predictive.py
 This module contains the Predictive Coding preprocessor.
 '''
 import numpy as np
+from sklearn import linear_model
 
 import idx2numpy
 import os
@@ -76,19 +77,33 @@ def extract_training_pairs(ordered_dataset, num_prev_imgs, prev_context_indices,
 	Assumes |prev_context_indices| and |current_context_indices| are lists of relative indices on (i, j)
 	'''
 	pixels_to_predict = get_valid_pixels(ordered_dataset[0].shape, current_context_indices)
-	training_pairs = []
+	X_train = []
+	Y_train = []
 	for current_img_index in range(num_prev_imgs, ordered_dataset.shape[0]):
 		for (i, j) in pixels_to_predict:
 			predictive_string = []
 			for a in range(num_prev_imgs):
 				predictive_string.append(ordered_dataset[current_img_index - a - 1][apply_relative_indices(prev_context_indices, i, j)])
 			predictive_string.append(ordered_dataset[current_img_index][apply_relative_indices(context_indices, i, j)])
-			training_pairs.append((np.array(predictive_string).ravel(), ordered_dataset[current_img_index][i][j]))
-	return training_pairs
+			X_train.append(np.array(predictive_string).ravel())
+			Y_train.append(ordered_dataset[current_img_index][i][j])
+	return (X_train, Y_train)
 
+def train_lasso_predictor(ordered_dataset, num_prev_imgs, prev_context_indices, current_context_indices):
+	start = timer()
+	training_context, true_pixels = extract_training_pairs(ordered_dataset, num_prev_imgs, prev_context_indices, current_context_indices)
+	end_extraction = timer()
+	print(f'\tExtracted training pairs in {timedelta(seconds=end_extraction-start)}')
+	np.save('trainingpairs', (training_context, true_pixels))
 
-def train_linear_predictor(ordered_dataset, num_prev_imgs, prev_context_indices, current_context_indices):
-	pass
+	start = timer()
+	clf = linear_model.Lasso(alpha=0.1)
+	clf.fit(training_context, true_pixels)
+	end_model_fitting = timer()
+	print(f'\tTrained a lasso model in {timedelta(seconds=end_model_fitting-start)}')
+
+	print('\tSparse coefficients:', clf.sparse_coef_)
+	print('\tLasso model achieved %05f%% accuracy' % clf.score(training_context, true_pixels))
 
 
 letters_4by4 = np.array([['A', 'B', 'C', 'D'], ['E', 'F', 'G', 'H'], ['I', 'J', 'K', 'L'], ['M', 'N', 'O', 'P']])
@@ -100,17 +115,11 @@ letters_3by3 = np.array([['A', 'B', 'C'], ['D', 'E', 'F'], ['G', 'H', 'I']])
 datapath = 'train-images-idx3-ubyte'
 dirname = os.path.dirname(__file__)
 dirpath = os.path.join(dirname, f'../../datasets/mnist')
-data = idx2numpy.convert_from_file(os.path.join(dirpath, datapath))
-mnist = data[0:8]
-mnist = mnist.reshape(-1, 784)[:, 140:156]
-mnist = mnist.reshape(-1, 4, 4) 
+mnist = idx2numpy.convert_from_file(os.path.join(dirpath, datapath))
 
-print(mnist[0])
-print(mnist[1])
-print(mnist[2])
 context_indices = [(-1, -1), (-1, 0), (0, -1)]
-for i in extract_training_pairs(mnist, 2, context_indices, context_indices):
-	print(i)
+train_lasso_predictor(mnist, 2, context_indices, context_indices)
+
 
 
 
