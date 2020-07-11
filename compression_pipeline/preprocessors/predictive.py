@@ -9,6 +9,9 @@ from sklearn import linear_model
 import idx2numpy
 import os
 
+import idx2numpy
+import os
+
 def line_order_raster_image_to_1d(img):
 	"""
 	A B C 
@@ -119,7 +122,5 @@ mnist = idx2numpy.convert_from_file(os.path.join(dirpath, datapath))
 
 context_indices = [(-1, -1), (-1, 0), (0, -1)]
 train_lasso_predictor(mnist, 2, context_indices, context_indices)
-
-
 
 
