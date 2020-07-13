@@ -79,6 +79,8 @@ def compress(data, element_axis, args):
 
     if compressor == 'knn-mst':
         return knn_mst_comp(data, element_axis, args.metric, args.minkowski_p)
+    elif compressor == 'predictive':
+        pass
 
 
 def encode(compression, pre_metadata, comp_metadata, original_shape, args):

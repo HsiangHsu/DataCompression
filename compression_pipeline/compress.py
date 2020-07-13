@@ -47,7 +47,7 @@ pre_group.add_argument('--ordering', type=str, default='random',
     help='dataset ordering strategy for predictive coding')
 
 comp_group = parser.add_argument_group('compressor')
-comp_group.add_argument('--comp', type=str, choices=['knn-mst'],
+comp_group.add_argument('--comp', type=str, choices=['knn-mst', 'predictive'],
     help='compressor to use', dest='comp', default='knn-mst')
 comp_group.add_argument('--metric', type=str,
     help='distance metric for knn-mst', choices=['hamming', 'minkowski'],
@@ -97,6 +97,9 @@ if (args.pre == 'sqpatch' or args.pre == 'rgb-sqpatch') and not args.psz:
 if (args.pre == 'rgb' or args.pre == 'rgb-sqpatch') and \
     (not (args.rgbr and args.rgbc)):
     parser.error('must supply --rgb-r and --rgb-c for rgb')
+
+if args.pre == 'predictive':
+    args.comp = 'predictive'
 
 full_start = timer()
 
