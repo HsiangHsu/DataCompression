@@ -15,7 +15,7 @@ from timeit import default_timer as timer
 from utilities import find_dtype
 
 
-def knn_mst_comp(data, element_axis, metric, minkowski_p):
+def knn_mst_comp(data, element_axis, metric, minkowski_p, k=1000):
     '''
     K Nearest Neighbors and Minimum Spanning Tree compressor
 
@@ -32,6 +32,8 @@ def knn_mst_comp(data, element_axis, metric, minkowski_p):
             distance metric used to build KNN graph
         minkowski_p: int
             parameter used for the Minkowski distance metric
+        k: int (optional, default=1000)
+            parameter for the KNN graph
 
     Returns:
         ordered_data: numpy array
@@ -64,7 +66,7 @@ def knn_mst_comp(data, element_axis, metric, minkowski_p):
             return_index=True)
 
         knn_graph = kneighbors_graph(unique_data,
-            min(len(unique_data)-1, 1000),
+            min(len(unique_data)-1, k),
             metric=metric, p=minkowski_p, mode='distance', n_jobs=-1)
 
         assert connected_components(knn_graph, directed=False, \
