@@ -26,7 +26,7 @@ parser.add_argument('dataset', type=str, help='dataset to compress',
 
 pre_group = parser.add_argument_group('preprocessor')
 pre_group.add_argument('--pre', type=str,
-    choices=['sqpatch', 'rgb', 'rgb-sqpatch', 'dict'],
+    choices=['sqpatch', 'rgb', 'rgb-sqpatch', 'dict', 'predictive'],
     help='preprocessor to use', dest='pre')
 pre_group.add_argument('--rgb-r', type=int,
     help='rows in rgb data', dest='rgbr')
@@ -42,6 +42,9 @@ pre_group.add_argument('--niter', type=int, default=100,
     help='number of mini-batch iterations')
 pre_group.add_argument('--bsz', type=int, default=10,
     help='mini-batch size')
+pre_group.add_argument('--ordering', type=str, default='random',
+    choices=['random', 'mst', 'hamiltonian'],
+    help='dataset ordering strategy for predictive coding')
 
 comp_group = parser.add_argument_group('compressor')
 comp_group.add_argument('--comp', type=str, choices=['knn-mst'],
