@@ -10,6 +10,7 @@ from encoders.delta_huffman import delta_huffman_enc, delta_huffman_dec
 from encoders.video import video_enc
 
 from numpy.random import default_rng
+from numpy import log
 
 def preprocess(data, args):
     '''
@@ -43,8 +44,10 @@ def preprocess(data, args):
         return dict_pre(data, args.nc, args.alpha, args.niter, args.bsz)
     elif preprocessor == 'predictive':
         ordered_data =  None
+        n_elements = data.shape[0]
         if args.ordering == 'mst':
-            assert False, 'MST ORDERING IS UNIMPLEMENTED'
+            ordered_data, _, _ = knn_mst_comp(data, element_axis=0, metric='euclidean', 
+                                              minkowski_p=2, k=3 * int(log(n_elements)))
         elif args.ordering == 'hamiltonian':
             assert False, 'HAMILTONIAN ORDERING IS UNIMPLEMENTED'
         elif args.ordering == 'random':
