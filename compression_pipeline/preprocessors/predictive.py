@@ -6,11 +6,8 @@ This module contains the Predictive Coding preprocessor.
 import numpy as np
 from sklearn import linear_model
 
-import idx2numpy
-import os
-
-import idx2numpy
-import os
+from datetime import timedelta
+from timeit import default_timer as timer
 
 def line_order_raster_image_to_1d(img):
 	"""
@@ -52,6 +49,7 @@ def hilbert_scan_raster_image_to_1d(img):
 	I J K L
 	M N O P
 	"""
+	print('Hilbert scan is unimplemented')
 	pass
 
 
@@ -87,12 +85,35 @@ def extract_training_pairs(ordered_dataset, num_prev_imgs, prev_context_indices,
 			predictive_string = []
 			for a in range(num_prev_imgs):
 				predictive_string.append(ordered_dataset[current_img_index - a - 1][apply_relative_indices(prev_context_indices, i, j)])
-			predictive_string.append(ordered_dataset[current_img_index][apply_relative_indices(context_indices, i, j)])
+			predictive_string.append(ordered_dataset[current_img_index][apply_relative_indices(current_context_indices, i, j)])
 			X_train.append(np.array(predictive_string).ravel())
 			Y_train.append(ordered_dataset[current_img_index][i][j])
 	return (X_train, Y_train)
 
 def train_lasso_predictor(ordered_dataset, num_prev_imgs, prev_context_indices, current_context_indices):
+	'''
+    Lasso linear regression preprocessor
+
+    Args:
+        ordered_dataset: numpy array
+            data to be preprocessed, of shape (n_elements, n_points)
+        num_prev_imgs: int
+        	how many images preceeding each element should be considered as "dataset context"
+        prev_context_indices: list of tuples where each tuple has dimension ordered_dataset.shape[1:]
+        	each tuple describes the relative location of a pixel to be used for context in each
+        	"dataset context" image
+		current_context_indices: list of tuples where each tuple has dimension ordered_dataset.shape[1:]
+        	each tuple describes the relative location of a pixel to be used for context 
+        	in the current image
+
+    Returns:
+        ordered_dataset: numpy array
+            unchanged from input
+        element_axis: int
+            index into ordered_dataset.shape for n_elements
+        clf: sklearn.linear_model.Lasso 
+            learned classifier
+    '''
 	start = timer()
 	training_context, true_pixels = extract_training_pairs(ordered_dataset, num_prev_imgs, prev_context_indices, current_context_indices)
 	end_extraction = timer()
@@ -105,22 +126,5 @@ def train_lasso_predictor(ordered_dataset, num_prev_imgs, prev_context_indices, 
 	end_model_fitting = timer()
 	print(f'\tTrained a lasso model in {timedelta(seconds=end_model_fitting-start)}')
 
-	print('\tSparse coefficients:', clf.sparse_coef_)
-	print('\tLasso model achieved %05f%% accuracy' % clf.score(training_context, true_pixels))
-
-
-letters_4by4 = np.array([['A', 'B', 'C', 'D'], ['E', 'F', 'G', 'H'], ['I', 'J', 'K', 'L'], ['M', 'N', 'O', 'P']])
-letters_3by3 = np.array([['A', 'B', 'C'], ['D', 'E', 'F'], ['G', 'H', 'I']])
-
-#print(zig_zag_raster_image_to_1d(4by4_letters))
-#print(zig_zag_raster_image_to_1d(3by3_letters))
-
-datapath = 'train-images-idx3-ubyte'
-dirname = os.path.dirname(__file__)
-dirpath = os.path.join(dirname, f'../../datasets/mnist')
-mnist = idx2numpy.convert_from_file(os.path.join(dirpath, datapath))
-
-context_indices = [(-1, -1), (-1, 0), (0, -1)]
-train_lasso_predictor(mnist, 2, context_indices, context_indices)
-
+	return ordered_dataset, 0, clf.sparse_coef_
 
