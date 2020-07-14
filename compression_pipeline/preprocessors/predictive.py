@@ -9,6 +9,8 @@ from sklearn import linear_model
 from datetime import timedelta
 from timeit import default_timer as timer
 
+import pickle
+
 def name_to_context_pixels(name):
 	if name == 'DAB':
 		return [(-1, 0), (-1, -1), (0, -1)]
@@ -17,56 +19,56 @@ def name_to_context_pixels(name):
 	return None
 
 def line_order_raster_image_to_1d(img):
-	"""
-	A B C 
-	D E F    -->    A B C D E F G H I
-	G H I
-	"""
-	return img.flatten()
+        """
+        A B C
+        D E F    -->    A B C D E F G H I
+        G H I
+        """
+        return img.flatten()
 
 def zig_zag_raster_image_to_1d(img):
-	"""
-	A B C 
-	D E F    -->    A B D G E C F H I
-	G H I
-	"""
-	scan = np.zeros((img.shape[0] * img.shape[1],), dtype=img.dtype)
-	l_to_r = True
-	total_diagonals = img.shape[0] + img.shape[1] - 1
-	i = 0
-	for diag_index in range(total_diagonals):
-		if diag_index <= total_diagonals // 2:
-			row_iter = range(diag_index, -1, -1) if l_to_r else range(0, diag_index + 1)
-			for row in row_iter:
-				scan[i] = img[row][diag_index - row]
-				i += 1
-		else:
-			# below the diagnoal
-			row_iter = range(img.shape[0] - 1, diag_index - img.shape[0], -1) if l_to_r else range(diag_index - img.shape[0] + 1, img.shape[0])
-			for row in row_iter:
-				scan[i] = img[row][diag_index - row]
-				i += 1
-		l_to_r = (not l_to_r)
-	return scan
+        """
+        A B C
+        D E F    -->    A B D G E C F H I
+        G H I
+        """
+        scan = np.zeros((img.shape[0] * img.shape[1],), dtype=img.dtype)
+        l_to_r = True
+        total_diagonals = img.shape[0] + img.shape[1] - 1
+        i = 0
+        for diag_index in range(total_diagonals):
+                if diag_index <= total_diagonals // 2:
+                        row_iter = range(diag_index, -1, -1) if l_to_r else range(0, diag_index + 1)
+                        for row in row_iter:
+                                scan[i] = img[row][diag_index - row]
+                                i += 1
+                else:
+                        # below the diagnoal
+                        row_iter = range(img.shape[0] - 1, diag_index - img.shape[0], -1) if l_to_r else range(diag_index - img.shape[0] + 1, img.shape[0])
+                        for row in row_iter:
+                                scan[i] = img[row][diag_index - row]
+                                i += 1
+                l_to_r = (not l_to_r)
+        return scan
 
 def hilbert_scan_raster_image_to_1d(img):
-	"""
-	A B C D
-	E F G H  -->    A E F B C G H D I M N J K O P L (maybe ???)
-	I J K L
-	M N O P
-	"""
-	print('Hilbert scan is unimplemented')
-	pass
+        """
+        A B C D
+        E F G H  -->    A E F B C G H D I M N J K O P L (maybe ???)
+        I J K L
+        M N O P
+        """
+        print('Hilbert scan is unimplemented')
+        pass
 
 
 def apply_relative_indices(relative_indices, i, j):
-	'''
-	Returns in a format suitable for ndarray indexing
-	'''
-	assert i >= 0
-	assert j >= 0
-	return ([x + i for (x, y) in relative_indices], [y + j for (x, y) in relative_indices])
+        '''
+        Returns in a format suitable for ndarray indexing
+        '''
+        assert i >= 0
+        assert j >= 0
+        return ([x + i for (x, y) in relative_indices], [y + j for (x, y) in relative_indices])
 
 
 def get_valid_pixels(img_shape, relative_indices):
@@ -108,20 +110,20 @@ def extract_training_pairs(ordered_dataset, num_prev_imgs, prev_context_indices,
 	return (X_train, Y_train)
 
 def train_lasso_predictor(ordered_dataset, num_prev_imgs, prev_context_indices, current_context_indices):
-	'''
+        '''
     Lasso linear regression preprocessor
 
     Args:
         ordered_dataset: numpy array
             data to be preprocessed, of shape (n_elements, n_points)
         num_prev_imgs: int
-        	how many images preceeding each element should be considered as "dataset context"
+                how many images preceeding each element should be considered as "dataset context"
         prev_context_indices: list of tuples where each tuple has dimension ordered_dataset.shape[1:]
-        	each tuple describes the relative location of a pixel to be used for context in each
-        	"dataset context" image
-		current_context_indices: list of tuples where each tuple has dimension ordered_dataset.shape[1:]
-        	each tuple describes the relative location of a pixel to be used for context 
-        	in the current image
+                each tuple describes the relative location of a pixel to be used for context in each
+                "dataset context" image
+                current_context_indices: list of tuples where each tuple has dimension ordered_dataset.shape[1:]
+                each tuple describes the relative location of a pixel to be used for context
+                in the current image
 
     Returns:
         ordered_dataset: numpy array
@@ -129,7 +131,7 @@ def train_lasso_predictor(ordered_dataset, num_prev_imgs, prev_context_indices, 
         element_axis: int
             index into ordered_dataset.shape for n_elements
         (clf, training_context, true_pixels): tuple of (sklearn.linear_model.Lasso, ndarray, ndarray)
-            first variable is the learned classifier and 
+            first variable is the learned classifier and
             second is a vector of length |num_prev_imgs| * len(|prev_context_indices|) + len(|current_context_indices|)
             third is a vector of length at MOST len(|ordered_dataset[0].ravel|)
     '''
@@ -143,6 +145,12 @@ def train_lasso_predictor(ordered_dataset, num_prev_imgs, prev_context_indices, 
 	clf.fit(training_context, true_pixels)
 	end_model_fitting = timer()
 	print(f'\tTrained a lasso model in {timedelta(seconds=end_model_fitting-start)}')
+
+	try:
+		with open('clf.pickle', 'wb') as f:
+			pickle.dump(clf, f)
+    except:
+    	print('\tCouldn\'t pickle clf.')
 
 	return ordered_dataset, 0, (clf, training_context, true_pixels)
 
