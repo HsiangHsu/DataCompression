@@ -104,9 +104,9 @@ def extract_training_pairs(ordered_dataset, num_prev_imgs, prev_context_indices,
     for current_img_index in range(num_prev_imgs, ordered_dataset.shape[0]):
         for (i, j) in pixels_to_predict:
             predictive_string = []
+            predictive_string.append(ordered_dataset[current_img_index][apply_relative_indices(current_context_indices, i, j)])
             for a in range(num_prev_imgs):
                 predictive_string.append(ordered_dataset[current_img_index - a - 1][apply_relative_indices(prev_context_indices, i, j)])
-            predictive_string.append(ordered_dataset[current_img_index][apply_relative_indices(current_context_indices, i, j)])
             X_train.append(np.concatenate(predictive_string))
             Y_train.append(ordered_dataset[current_img_index][i][j])
     return (X_train, Y_train)
@@ -147,6 +147,7 @@ def train_linear_reg_predictor(ordered_dataset, num_prev_imgs, prev_context_indi
     clf.fit(training_context, true_pixels)
     end_model_fitting = timer()
     print(f'\tTrained a linear model in {timedelta(seconds=end_model_fitting-start)}')
+    print('Accuracy: %05f' % clf.score(training_context, true_pixels))
     try:
         with open(f'clf_{datetime.now().hour}_{datetime.now().minute}.pickle', 'wb') as f:
             pickle.dump(clf, f)
