@@ -13,9 +13,9 @@ import pickle
 
 def name_to_context_pixels(name):
     if name == 'DAB':
-        return [(-1, 0), (-1, -1), (0, -1)]
+        return [(0, -1), (-1, 0), (-1, -1)]
     if name == 'DABC':
-        return [(-1, 0), (-1, -1), (0, -1), (1, -1)]
+        return [(0, -1), (-1, -1), (-1, 0), (-1, 1)]
     return None
 
 def line_order_raster_image_to_1d(img):
