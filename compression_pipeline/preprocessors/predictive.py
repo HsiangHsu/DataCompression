@@ -9,6 +9,13 @@ from sklearn import linear_model
 from datetime import timedelta
 from timeit import default_timer as timer
 
+def name_to_context_pixels(name):
+	if name == 'DAB':
+		return [(-1, 0), (-1, -1), (0, -1)]
+	if name == 'DABC':
+		return [(-1, 0), (-1, -1), (0, -1), (1, -1)]
+	return None
+
 def line_order_raster_image_to_1d(img):
 	"""
 	A B C 
@@ -63,6 +70,14 @@ def apply_relative_indices(relative_indices, i, j):
 
 
 def get_valid_pixels(img_shape, relative_indices):
+	'''
+	Because we do not currently support scan patterns or initial context that is
+	"ahead of"  (either to the right or below) a current pixel, we require
+	relative context indices to be negative-valued in the row or zero in the current row 
+	but negative in the column.
+	'''
+	err_msg = "Impossible to satisfy passing initial context with these relative indices"
+	assert np.all([index[1] < 0 or (index[1] == 0 and index[0] < 0) for index in relative_indices]), err_msg
 	valid_pixels = []
 	min_x = abs(min([index[0] for index in relative_indices]))
 	max_x = img_shape[1] - max(0, max([index[0] for index in relative_indices])) - 1
@@ -77,7 +92,9 @@ def extract_training_pairs(ordered_dataset, num_prev_imgs, prev_context_indices,
 	'''
 	Assumes |prev_context_indices| and |current_context_indices| are lists of relative indices on (i, j)
 	'''
-	pixels_to_predict = get_valid_pixels(ordered_dataset[0].shape, current_context_indices)
+	valid_in_cur = get_valid_pixels(ordered_dataset[0].shape, current_context_indices)
+	valid_in_prev = get_valid_pixels(ordered_dataset[0].shape, prev_context_indices)
+	pixels_to_predict = [p for p in valid_in_prev if p in valid_in_cur]
 	X_train = []
 	Y_train = []
 	for current_img_index in range(num_prev_imgs, ordered_dataset.shape[0]):
@@ -86,7 +103,7 @@ def extract_training_pairs(ordered_dataset, num_prev_imgs, prev_context_indices,
 			for a in range(num_prev_imgs):
 				predictive_string.append(ordered_dataset[current_img_index - a - 1][apply_relative_indices(prev_context_indices, i, j)])
 			predictive_string.append(ordered_dataset[current_img_index][apply_relative_indices(current_context_indices, i, j)])
-			X_train.append(np.array(predictive_string).ravel())
+			X_train.append(np.concatenate(predictive_string))
 			Y_train.append(ordered_dataset[current_img_index][i][j])
 	return (X_train, Y_train)
 
@@ -121,7 +138,6 @@ def train_lasso_predictor(ordered_dataset, num_prev_imgs, prev_context_indices, 
 	end_extraction = timer()
 	print(f'\tExtracted training pairs in {timedelta(seconds=end_extraction-start)}')
 	np.save('trainingpairs', (training_context, true_pixels))
-
 	start = timer()
 	clf = linear_model.Lasso(alpha=0.1)
 	clf.fit(training_context, true_pixels)

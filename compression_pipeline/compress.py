@@ -42,9 +42,20 @@ pre_group.add_argument('--niter', type=int, default=100,
     help='number of mini-batch iterations')
 pre_group.add_argument('--bsz', type=int, default=10,
     help='mini-batch size')
+# For predictive coding in predicting pixel X in
+#   A B C
+#   D X E
+#   F G H
+pixel_context_strategies = ['DAB', 'DABC']
 pre_group.add_argument('--ordering', type=str, default='random',
     choices=['random', 'mst', 'hamiltonian'],
     help='dataset ordering strategy for predictive coding')
+pre_group.add_argument('--prev-context', type=str, default='DAB',
+    dest='prev_context', choices = pixel_context_strategies,
+    help='context pixels for predictive coding prior images')
+pre_group.add_argument('--current-context', type=str, default='DAB',
+    dest='curr_context', choices = pixel_context_strategies,
+    help='context pixels for predictive coding current image')
 
 comp_group = parser.add_argument_group('compressor')
 comp_group.add_argument('--comp', type=str, choices=['knn-mst', 'predictive'],
