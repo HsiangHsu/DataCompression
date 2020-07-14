@@ -113,8 +113,10 @@ def train_lasso_predictor(ordered_dataset, num_prev_imgs, prev_context_indices, 
             unchanged from input
         element_axis: int
             index into ordered_dataset.shape for n_elements
-        clf: sklearn.linear_model.Lasso
-            learned classifier
+        (clf, training_context, true_pixels): tuple of (sklearn.linear_model.Lasso, ndarray, ndarray)
+            first variable is the learned classifier and
+            second is a vector of length |num_prev_imgs| * len(|prev_context_indices|) + len(|current_context_indices|)
+            third is a vector of length at MOST len(|ordered_dataset[0].ravel|)
     '''
 
         # TODO TEMP
@@ -140,4 +142,3 @@ def train_lasso_predictor(ordered_dataset, num_prev_imgs, prev_context_indices, 
             print('\tCouldn\'t pickle clf.')
 
         return ordered_dataset, 0, (clf, training_context, true_pixels)
-

@@ -13,6 +13,7 @@ from encoders.predictive_golomb import pred_golomb_enc
 from encoders.video import video_enc
 
 from numpy.random import default_rng
+from numpy import log
 
 def preprocess(data, args):
     '''
@@ -45,16 +46,19 @@ def preprocess(data, args):
     elif preprocessor == 'dict':
         return dict_pre(data, args.nc, args.alpha, args.niter, args.bsz)
     elif preprocessor == 'predictive':
-        ordered_data =  data
+        ordered_data =  None
+        n_elements = data.shape[0]
         if args.ordering == 'mst':
-            assert False, 'MST ORDERING IS UNIMPLEMENTED'
+            ordered_data, _, _ = knn_mst_comp(data, element_axis=0, metric='euclidean',
+                                              minkowski_p=2, k=3 * int(log(n_elements)))
+            ordered_data = ordered_data.reshape(n_elements, *data.shape[1:])
         elif args.ordering == 'hamiltonian':
             assert False, 'HAMILTONIAN ORDERING IS UNIMPLEMENTED'
         elif args.ordering == 'random':
             # TODO: Skip this for now for repeatability
             # rng = default_rng()
             # ordered_data = data[rng.permutation(data.shape[0])]
-            pass
+            ordered_data =  data
         context_indices = [(-1, -1), (-1, 0), (0, -1)]
         return train_lasso_predictor(ordered_data, 2, context_indices,
             context_indices)
@@ -87,7 +91,7 @@ def compress(data, element_axis, pre_metadata, args):
 
     if compressor == 'knn-mst':
         return knn_mst_comp(data, element_axis, args.metric, args.minkowski_p)
-    if compressor == 'predictive':
+    elif compressor == 'predictive':
         return predictive_comp(data, element_axis, *pre_metadata)
 
 

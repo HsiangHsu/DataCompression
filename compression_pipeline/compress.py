@@ -98,13 +98,13 @@ if (args.pre == 'rgb' or args.pre == 'rgb-sqpatch') and \
     (not (args.rgbr and args.rgbc)):
     parser.error('must supply --rgb-r and --rgb-c for rgb')
 
-# for arg in (args.pre, args.comp, args.enc):
-#     if arg in ['predictive', 'pred-huff', 'pred-golomb']:
-#         for arg_2 in (args.pre, args.comp, args.enc):
-#             try:
-#                 assert arg_2 in ['predictive', 'pred-huff', 'pred-golomb']
-#             except AssertionError:
-#                 parser.error('Must use predictive options for all fields')
+for arg in (args.pre, args.comp, args.enc):
+    if arg in ['predictive', 'pred-huff', 'pred-golomb']:
+        for arg_2 in (args.pre, args.comp, args.enc):
+            try:
+                assert arg_2 in ['predictive', 'pred-huff', 'pred-golomb']
+            except AssertionError:
+                parser.error('Must use predictive options for all fields')
 
 full_start = timer()
 
