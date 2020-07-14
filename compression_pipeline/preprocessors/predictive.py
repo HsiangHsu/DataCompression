@@ -6,7 +6,7 @@ This module contains the Predictive Coding preprocessor.
 import numpy as np
 from sklearn import linear_model
 
-from datetime import timedelta
+from datetime import timedelta, datetime
 from timeit import default_timer as timer
 
 import pickle
@@ -74,7 +74,7 @@ def apply_relative_indices(relative_indices, i, j):
 def get_valid_pixels(img_shape, relative_indices):
     '''
     TODO: if raster scans are more general.
-     
+
     Because we do not currently support scan patterns or initial context that is
     "ahead of"  (either to the right or below) a current pixel, we require
     relative context indices to be negative-valued in the row or zero in the current row 
@@ -141,14 +141,14 @@ def train_linear_reg_predictor(ordered_dataset, num_prev_imgs, prev_context_indi
     training_context, true_pixels = extract_training_pairs(ordered_dataset, num_prev_imgs, prev_context_indices, current_context_indices)
     end_extraction = timer()
     print(f'\tExtracted training pairs in {timedelta(seconds=end_extraction-start)}')
-    np.save('trainingpairs', (training_context, true_pixels))
+    np.save(f'trainingpairs_{datetime.now().hour}_{datetime.now().minute}', (training_context, true_pixels))
     start = timer()
     clf = linear_model.LinearRegression()
     clf.fit(training_context, true_pixels)
     end_model_fitting = timer()
     print(f'\tTrained a linear model in {timedelta(seconds=end_model_fitting-start)}')
     try:
-        with open('clf.pickle', 'wb') as f:
+        with open(f'clf_{datetime.now().hour}_{datetime.now().minute}.pickle', 'wb') as f:
             pickle.dump(clf, f)
     except:
         print('\tCouldn\'t pickle clf.')
