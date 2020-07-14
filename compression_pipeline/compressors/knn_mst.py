@@ -14,6 +14,8 @@ from timeit import default_timer as timer
 
 from utilities import find_dtype
 
+class DisconnectedKNN(Exception):
+    pass
 
 def knn_mst_comp(data, element_axis, metric, minkowski_p, k=1000):
     '''
@@ -44,6 +46,9 @@ def knn_mst_comp(data, element_axis, metric, minkowski_p, k=1000):
             the original dataset order, of shape (n_layers, n_elements)
         original_shape: tuple
             shape of original data
+
+    Raises:
+        DisconnectedKNN if |k| is too small for the KNN graph to be connected
     '''
 
     # reshape data into a 3D array: (n_layers, n_elements, n_points)
@@ -69,8 +74,9 @@ def knn_mst_comp(data, element_axis, metric, minkowski_p, k=1000):
             min(len(unique_data)-1, k),
             metric=metric, p=minkowski_p, mode='distance', n_jobs=-1)
 
-        assert connected_components(knn_graph, directed=False, \
-            return_labels=False) == 1
+        if connected_components(knn_graph, directed=False, \
+            return_labels=False) != 1:
+            raise DisconnectedKNN("KNN graph is disconnected. Increase K.")
 
         end = timer()
         print(f'\tknn_graph in {timedelta(seconds=end-start)}.')

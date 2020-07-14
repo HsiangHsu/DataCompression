@@ -3,7 +3,7 @@ from preprocessors.rgb import rgb_pre, rgb_post
 from preprocessors.dict import dict_pre, dict_post
 from preprocessors.predictive import train_lasso_predictor
 
-from compressors.knn_mst import knn_mst_comp, knn_mst_decomp
+from compressors.knn_mst import knn_mst_comp, knn_mst_decomp, DisconnectedKNN
 
 from encoders.delta_coo import delta_coo_enc, delta_coo_dec
 from encoders.delta_huffman import delta_huffman_enc, delta_huffman_dec
@@ -46,8 +46,16 @@ def preprocess(data, args):
         ordered_data =  None
         n_elements = data.shape[0]
         if args.ordering == 'mst':
-            ordered_data, _, _ = knn_mst_comp(data, element_axis=0, metric='euclidean', 
-                                              minkowski_p=2, k=3 * int(log(n_elements)))
+            alpha = 1
+            while True:
+                try:
+                    # DOI: 0.1016/S0167-7152(02)00421-2 showed k = O(log n) usually
+                    # gives connectedness in the k-NN.
+                    ordered_data, _, _ = knn_mst_comp(data, element_axis=0, metric='euclidean', 
+                                              minkowski_p=2, k=alpha * int(log(n_elements)))
+                    break
+                except DisconnectedKNN:
+                    alpha *= 10
             ordered_data = ordered_data.reshape(n_elements, *data.shape[1:])
         elif args.ordering == 'hamiltonian':
             assert False, 'HAMILTONIAN ORDERING IS UNIMPLEMENTED'
