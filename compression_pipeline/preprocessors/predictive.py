@@ -73,6 +73,8 @@ def apply_relative_indices(relative_indices, i, j):
 
 def get_valid_pixels(img_shape, relative_indices):
     '''
+    TODO: if raster scans are more general.
+     
     Because we do not currently support scan patterns or initial context that is
     "ahead of"  (either to the right or below) a current pixel, we require
     relative context indices to be negative-valued in the row or zero in the current row 
@@ -109,9 +111,9 @@ def extract_training_pairs(ordered_dataset, num_prev_imgs, prev_context_indices,
             Y_train.append(ordered_dataset[current_img_index][i][j])
     return (X_train, Y_train)
 
-def train_lasso_predictor(ordered_dataset, num_prev_imgs, prev_context_indices, current_context_indices):
+def train_linear_reg_predictor(ordered_dataset, num_prev_imgs, prev_context_indices, current_context_indices):
     '''
-    Lasso linear regression preprocessor
+    Linear regression preprocessor
 
     Args:
         ordered_dataset: numpy array
@@ -141,10 +143,10 @@ def train_lasso_predictor(ordered_dataset, num_prev_imgs, prev_context_indices, 
     print(f'\tExtracted training pairs in {timedelta(seconds=end_extraction-start)}')
     np.save('trainingpairs', (training_context, true_pixels))
     start = timer()
-    clf = linear_model.Lasso(alpha=0.1)
+    clf = linear_model.LinearRegression()
     clf.fit(training_context, true_pixels)
     end_model_fitting = timer()
-    print(f'\tTrained a lasso model in {timedelta(seconds=end_model_fitting-start)}')
+    print(f'\tTrained a linear model in {timedelta(seconds=end_model_fitting-start)}')
     try:
         with open('clf.pickle', 'wb') as f:
             pickle.dump(clf, f)

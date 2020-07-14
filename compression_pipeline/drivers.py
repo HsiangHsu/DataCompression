@@ -1,7 +1,7 @@
 from preprocessors.sqpatch import sqpatch_pre, sqpatch_post
 from preprocessors.rgb import rgb_pre, rgb_post
 from preprocessors.dict import dict_pre, dict_post
-from preprocessors.predictive import train_lasso_predictor, name_to_context_pixels
+from preprocessors.predictive import train_linear_reg_predictor, name_to_context_pixels
 
 from compressors.knn_mst import knn_mst_comp, knn_mst_decomp, DisconnectedKNN
 from compressors.knn_mst import knn_mst_comp, knn_mst_decomp
@@ -68,7 +68,7 @@ def preprocess(data, args):
             ordered_data = data[rng.permutation(data.shape[0])]
         prev_context_indices = name_to_context_pixels(args.prev_context)
         current_context_indices = name_to_context_pixels(args.curr_context)
-        return train_lasso_predictor(ordered_data, 2, prev_context_indices, 
+        return train_linear_reg_predictor(ordered_data, 2, prev_context_indices, 
                                      current_context_indices)
 
 
