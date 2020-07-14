@@ -47,7 +47,7 @@ pre_group.add_argument('--ordering', type=str, default='random',
     help='dataset ordering strategy for predictive coding')
 
 comp_group = parser.add_argument_group('compressor')
-comp_group.add_argument('--comp', type=str, choices=['knn-mst'],
+comp_group.add_argument('--comp', type=str, choices=['knn-mst', 'predictive'],
     help='compressor to use', dest='comp', default='knn-mst')
 comp_group.add_argument('--metric', type=str,
     help='distance metric for knn-mst', choices=['hamming', 'minkowski'],
@@ -55,7 +55,7 @@ comp_group.add_argument('--metric', type=str,
 comp_group.add_argument('--minkp', type=int,
     help='parameter for Minkowski metric', dest='minkowski_p', default=2)
 comp_group.add_argument('--enc', type=str,
-    choices=['delta-coo', 'delta-huff', 'video'],
+    choices=['delta-coo', 'delta-huff', 'video', 'pred-huff', 'pred-golomb'],
     help='encoder to use', dest='enc', default='delta-huff')
 
 video_enc_group = parser.add_argument_group('video encoding')
@@ -98,6 +98,14 @@ if (args.pre == 'rgb' or args.pre == 'rgb-sqpatch') and \
     (not (args.rgbr and args.rgbc)):
     parser.error('must supply --rgb-r and --rgb-c for rgb')
 
+# for arg in (args.pre, args.comp, args.enc):
+#     if arg in ['predictive', 'pred-huff', 'pred-golomb']:
+#         for arg_2 in (args.pre, args.comp, args.enc):
+#             try:
+#                 assert arg_2 in ['predictive', 'pred-huff', 'pred-golomb']
+#             except AssertionError:
+#                 parser.error('Must use predictive options for all fields')
+
 full_start = timer()
 
 start = timer()
@@ -120,7 +128,7 @@ print(f'preprocess in {timedelta(seconds=end-start)}.\n')
 
 start = timer()
 compressed_data, comp_metadata, original_shape = compress(data, element_axis,
-    args)
+    pre_metadata, args)
 end = timer()
 print(f'compress in {timedelta(seconds=end-start)}.\n')
 
