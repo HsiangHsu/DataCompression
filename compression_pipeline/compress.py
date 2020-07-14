@@ -56,6 +56,8 @@ pre_group.add_argument('--prev-context', type=str, default='DAB',
 pre_group.add_argument('--current-context', type=str, default='DAB',
     dest='curr_context', choices = pixel_context_strategies,
     help='context pixels for predictive coding current image')
+pre_group.add_argument('--num-prev-imgs', type=int, default=2,
+    dest='num_prev_imgs')
 
 comp_group = parser.add_argument_group('compressor')
 comp_group.add_argument('--comp', type=str, choices=['knn-mst', 'predictive'],
@@ -116,7 +118,9 @@ for arg in (args.pre, args.comp, args.enc):
                 assert arg_2 in ['predictive', 'pred-huff', 'pred-golomb']
             except AssertionError:
                 parser.error('Must use predictive options for all fields')
-
+if args.num_prev_imgs < 0:
+    parser.error("Must specify non-negative number of previous images for predictive coding")
+    
 full_start = timer()
 
 start = timer()

@@ -68,8 +68,8 @@ def preprocess(data, args):
             ordered_data = data[rng.permutation(data.shape[0])]
         prev_context_indices = name_to_context_pixels(args.prev_context)
         current_context_indices = name_to_context_pixels(args.curr_context)
-        return train_linear_reg_predictor(ordered_data, 2, prev_context_indices, 
-                                     current_context_indices)
+        return train_linear_reg_predictor(ordered_data, args.num_prev_imgs, prev_context_indices, 
+                                          current_context_indices)
 
 
 def compress(data, element_axis, pre_metadata, args):
