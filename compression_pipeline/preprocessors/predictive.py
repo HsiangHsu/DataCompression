@@ -149,7 +149,7 @@ def train_linear_reg_predictor(ordered_dataset, num_prev_imgs, prev_context_indi
     print(f'\tTrained a linear model in {timedelta(seconds=end_model_fitting-start)}')
     print('Accuracy: %05f' % clf.score(training_context, true_pixels))
     try:
-        with open(f'clf_{datetime.now().hour}_{datetime.now().minute}.pickle', 'wb') as f:
+        with open('clf.pickle', 'wb') as f:
             pickle.dump(clf, f)
     except:
         print('\tCouldn\'t pickle clf.')
