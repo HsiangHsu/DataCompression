@@ -17,39 +17,40 @@ from matplotlib import pyplot as plt
 
 def predictive_comp(data, element_axis, predictor, training_context,
     true_pixels, n_prev, pcs, ccs):
-    with open('clf.pickle', 'rb') as f:
-        clf = pickle.load(f)
     assert training_context is not None
     assert true_pixels is not None
-    estimated_pixels = clf.predict(training_context)
-    estimated_pixels = np.clip(estimated_pixels, 0, 255).astype(np.uint8)
+
+    # Build error string
+    dtype = data.dtype
+    estimated_pixels = predictor.predict(training_context)
+    minval, maxval = np.iinfo(dtype).min, np.iinfo(dtype).max
+    estimated_pixels = np.clip(estimated_pixels, minval, maxval).astype(dtype)
     error_string = true_pixels - estimated_pixels
 
-    residuals = np.array([], dtype=data.dtype)
+    # Build residuals
+    residuals = np.array([], dtype=dtype)
     residuals = np.append(residuals, data[:n_prev].flatten())
-
-    if ccs == 'DAB':
-        for img in data[2:]:
-            residuals = np.append(residuals, img[0,:])
-            residuals = np.append(residuals, img[1:,0])
-    else:
-        print(f'Current context string {ccs} unsupported by compressor.')
-        exit()
-
+    r_start, r_end, c_start, c_end = get_pred_range(data.shape, ccs, pcs)
+    for img in data[2:]:
+        residuals = np.append(residuals, img[:r_start,:])
+        residuals = np.append(residuals, img[r_start:,:c_start])
+        residuals = np.append(residuals, img[r_end:,c_start:])
+        residuals = np.append(residuals, img[r_start:r_end,c_end:])
     assert residuals.shape[0] + error_string.shape[0] == np.prod(data.shape)
 
-    return (error_string, residuals, clf), None, data.shape
+    return (error_string, residuals, predictor), None, data.shape
+
 
 def predictive_decomp(error_string, residuals, predictor, n_prev, pcs, ccs,
     original_shape):
 
     dtype = error_string.dtype
-    minval = np.iinfo(dtype).min
-    maxval = np.iinfo(dtype).max
+    minval, maxval = np.iinfo(dtype).min, np.iinfo(dtype).max
 
     data = np.empty(original_shape, dtype=dtype)
-    errors = reshape_errors(error_string, original_shape, n_prev, ccs)
-    r_start, c_start = get_pred_range(ccs)
+    r_start, r_end, c_start, c_end = get_pred_range(original_shape, ccs, pcs)
+    errors = error_string.reshape((original_shape[0]-n_prev, r_end-r_start,
+        c_end-c_start))
 
     for n in range(n_prev):
         to_pop = original_shape[1] * original_shape[2]
@@ -58,11 +59,11 @@ def predictive_decomp(error_string, residuals, predictor, n_prev, pcs, ccs,
 
     for n in range(n_prev, original_shape[0]):
         data, residuals = load_residuals(data, residuals, original_shape, n,
-            ccs)
+            r_start, r_end, c_start, c_end)
 
         # Run predictor over remaining pixels
-        for r in range(r_start, original_shape[1]):
-            for c in range(c_start, original_shape[2]):
+        for r in range(r_start, r_end):
+            for c in range(c_start, c_end):
                 context = get_context(data, n_prev, pcs, ccs, n, r, c)
                 prediction = predictor.predict(context)
                 prediction = np.clip(prediction, minval, maxval).astype(dtype)
@@ -74,40 +75,84 @@ def predictive_decomp(error_string, residuals, predictor, n_prev, pcs, ccs,
 
     return data
 
-def reshape_errors(error_string, original_shape, n_prev, ccs):
+
+def get_pred_range(original_shape, ccs, pcs):
+    r_start = 0
+    r_end = original_shape[1]
+    c_start = 0
+    c_end = original_shape[2]
+
     if ccs == 'DAB':
-        return error_string.reshape((original_shape[0]-n_prev,
-            original_shape[1]-1, original_shape[2]-1))
+        r_start = max(r_start, 1)
+        r_end = min(r_end, original_shape[1])
+        c_start = max(c_start, 1)
+        c_end = min(c_end, original_shape[2])
+    elif ccs == 'DABC':
+        r_start = max(r_start, 1)
+        r_end = min(r_end, original_shape[1])
+        c_start = max(c_start, 1)
+        c_end = min(c_end, original_shape[2]-1)
     else:
         print(f'Current context string {ccs} unsupported by decompressor.')
         exit()
 
-def get_pred_range(ccs):
-    if ccs == 'DAB':
-        return 1, 1
+    if pcs == 'DAB':
+        r_start = max(r_start, 1)
+        r_end = min(r_end, original_shape[1])
+        c_start = max(c_start, 1)
+        c_end = min(c_end, original_shape[2])
+    elif pcs == 'DABC':
+        r_start = max(r_start, 1)
+        r_end = min(r_end, original_shape[1])
+        c_start = max(c_start, 1)
+        c_end = min(c_end, original_shape[2]-1)
     else:
-        print(f'Current context string {ccs} unsupported by decompressor.')
+        print(f'Previous context string {pcs} unsupported by decompressor.')
         exit()
 
-def load_residuals(data, residuals, original_shape, n, ccs):
-    if ccs == 'DAB':
-        to_pop = original_shape[1]
-        data[n,:1], residuals = residuals[:to_pop].reshape((1, -1)), \
-            residuals[to_pop:]
-        to_pop = original_shape[2] - 1
-        data[n,1:,:1], residuals = residuals[:to_pop].reshape((-1, 1)), \
-            residuals[to_pop:]
-        return data, residuals
-    else:
-        print(f'Current context string {ccs} unsupported by decompressor.')
-        exit()
+    return r_start, r_end, c_start, c_end
+
+
+def load_residuals(data, residuals, original_shape, n, r_start, r_end, c_start,
+    c_end):
+    nr = r_start
+    nc = original_shape[2]
+    to_pop = nr*nc
+    data[n,:r_start,:], residuals = \
+        residuals[:to_pop].reshape((nr, nc)), residuals[to_pop:]
+
+    nr = original_shape[1] - r_start
+    nc = c_start
+    to_pop = nr*nc
+    data[n,r_start:,:c_start], residuals = \
+        residuals[:to_pop].reshape((nr, nc)), residuals[to_pop:]
+
+    nr = original_shape[1] - r_end
+    nc = original_shape[2] - c_start
+    to_pop = nr*nc
+    data[n,r_end:,c_start:], residuals = \
+        residuals[:to_pop].reshape((nr, nc)), residuals[to_pop:]
+
+    nr = r_end - r_start
+    nc = original_shape[2] - c_end
+    to_pop = nr*nc
+    data[n,r_start:r_end,c_end:], residuals = \
+        residuals[:to_pop].reshape((nr, nc)), residuals[to_pop:]
+
+    return data, residuals
+
 
 def get_context(data, n_prev, pcs, ccs, n, r, c):
     context = np.empty((1, len(ccs)+len(pcs)*n_prev))
     if ccs == 'DAB':
         context[0, 0] = data[n,r,c-1]
-        context[0, 1] = data[n,r-1,c]
-        context[0, 2] = data[n,r-1,c-1]
+        context[0, 1] = data[n,r-1,c-1]
+        context[0, 2] = data[n,r-1,c]
+    elif ccs == 'DABC':
+        context[0, 0] = data[n,r,c-1]
+        context[0, 1] = data[n,r-1,c-1]
+        context[0, 2] = data[n,r-1,c]
+        context[0, 3] = data[n,r-1,c+1]
     else:
         print(f'Current context string {ccs} unsupported by decompressor.')
         exit()
@@ -115,11 +160,16 @@ def get_context(data, n_prev, pcs, ccs, n, r, c):
     if pcs == 'DAB':
         for p in range(n_prev):
             context[0, len(ccs)+3*p] = data[n-(p+1),r,c-1]
-            context[0, len(ccs)+3*p+1] = data[n-(p+1),r-1,c]
-            context[0, len(ccs)+3*p+2] = data[n-(p+1),r-1,c-1]
+            context[0, len(ccs)+3*p+1] = data[n-(p+1),r-1,c-1]
+            context[0, len(ccs)+3*p+2] = data[n-(p+1),r-1,c]
+    elif pcs == 'DABC':
+        for p in range(n_prev):
+            context[0, len(ccs)+4*p] = data[n-(p+1),r,c-1]
+            context[0, len(ccs)+4*p+1] = data[n-(p+1),r-1,c-1]
+            context[0, len(ccs)+4*p+2] = data[n-(p+1),r-1,c]
+            context[0, len(ccs)+4*p+3] = data[n-(p+1),r-1,c+1]
     else:
         print(f'Previous context string {pcs} unsupported by decompressor.')
         exit()
 
     return context
-

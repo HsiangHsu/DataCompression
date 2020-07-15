@@ -71,11 +71,11 @@ def preprocess(data, args):
             rng = default_rng()
             ordered_data = data[rng.permutation(data.shape[0])]
         if args.feature_file is not None:
-            return train_linear_predictor(args.predictor_family, ordered_data,
+            return train_predictor(args.predictor_family, ordered_data,
                 args.num_prev_imgs, args.prev_context, args.curr_context,
                 should_extract_training_pairs=False,
                 training_filenames=(args.feature_file, args.label_file))
-        return train_linear_predictor(args.predictor_family, ordered_data,
+        return train_predictor(args.predictor_family, ordered_data,
             args.num_prev_imgs, args.prev_context, args.curr_context)
 
 

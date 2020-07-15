@@ -46,8 +46,8 @@ pre_group.add_argument('--bsz', type=int, default=10,
 #   A B C
 #   D X E
 #   F G H
-pre_group.add_argument('--predictor-family', type=str, default='linear', 
-    dest='predictor_family', choices=['linear', 'logistic'], 
+pre_group.add_argument('--predictor-family', type=str, default='linear',
+    dest='predictor_family', choices=['linear', 'logistic'],
     help='model class to use for predicting pixels')
 pixel_context_strategies = ['DAB', 'DABC']
 pre_group.add_argument('--ordering', type=str, default='random',
@@ -61,9 +61,9 @@ pre_group.add_argument('--current-context', type=str, default='DAB',
     help='context pixels for predictive coding current image')
 pre_group.add_argument('--num-prev-imgs', type=int, default=2,
     dest='num_prev_imgs')
-pre_group.add_argument('--feature-file', type=str, dest='feature_file', 
+pre_group.add_argument('--feature-file', type=str, dest='feature_file',
     required=False)
-pre_group.add_argument('--label-file', type=str, dest='label_file', 
+pre_group.add_argument('--label-file', type=str, dest='label_file',
     required=False)
 
 comp_group = parser.add_argument_group('compressor')

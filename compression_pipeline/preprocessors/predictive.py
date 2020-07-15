@@ -13,7 +13,7 @@ import pickle
 
 def name_to_context_pixels(name):
     if name == 'DAB':
-        return [(0, -1), (-1, 0), (-1, -1)]
+        return [(0, -1), (-1, -1), (-1, 0)]
     if name == 'DABC':
         return [(0, -1), (-1, -1), (-1, 0), (-1, 1)]
     return None
@@ -111,7 +111,7 @@ def extract_training_pairs(ordered_dataset, num_prev_imgs, prev_context_indices,
             Y_train.append(ordered_dataset[current_img_index][i][j])
     return (X_train, Y_train)
 
-def train_linear_predictor(predictor_family, ordered_dataset, num_prev_imgs,
+def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
     prev_context, cur_context, should_extract_training_pairs=True,
     training_filenames=None):
     '''
@@ -184,12 +184,7 @@ def train_linear_predictor(predictor_family, ordered_dataset, num_prev_imgs,
     end_model_fitting = timer()
     print(f'\tTrained a {predictor_family} model in ' + \
         f'{timedelta(seconds=end_model_fitting-start)}.')
-    print('\t\t(Accuracy: %05f)' % clf.score(training_context, true_pixels))
-    try:
-        with open('clf.pickle', 'wb') as f:
-            pickle.dump(clf, f)
-    except:
-        print('\tCouldn\'t pickle clf.')
+    print('\t\t(Accuracy: %05f)\n' % clf.score(training_context, true_pixels))
 
     return ordered_dataset, 0, (clf, training_context, true_pixels,
         num_prev_imgs, prev_context, cur_context)
