@@ -90,3 +90,4 @@ def load(dataset):
         for col in df:
             df[col] = pd.to_numeric(df[col], downcast='unsigned')
         return (np.ascontiguousarray(df.to_numpy()), None)
+    assert False, "Could not load specified dataset %s" % dataset
