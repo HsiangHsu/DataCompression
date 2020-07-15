@@ -77,7 +77,7 @@ def get_valid_pixels(img_shape, relative_indices):
 
     Because we do not currently support scan patterns or initial context that is
     "ahead of"  (either to the right or below) a current pixel, we require
-    relative context indices to be negative-valued in the row or zero in the current row 
+    relative context indices to be negative-valued in the row or zero in the current row
     but negative in the column.
     '''
     err_msg = "Impossible to satisfy passing initial context with these relative indices %r"
@@ -111,8 +111,9 @@ def extract_training_pairs(ordered_dataset, num_prev_imgs, prev_context_indices,
             Y_train.append(ordered_dataset[current_img_index][i][j])
     return (X_train, Y_train)
 
-def train_linear_predictor(ordered_dataset, num_prev_imgs, prev_context_indices, current_context_indices,
-                           should_extract_training_pairs=True, training_filenames=None):
+def train_linear_predictor(ordered_dataset, num_prev_imgs,
+    prev_context, cur_context,
+    should_extract_training_pairs=True, training_filenames=None):
     '''
     Linear regression preprocessor
 
@@ -120,40 +121,53 @@ def train_linear_predictor(ordered_dataset, num_prev_imgs, prev_context_indices,
         ordered_dataset: numpy array
             data to be preprocessed, of shape (n_elements, n_points)
         num_prev_imgs: int
-            how many images preceeding each element should be considered as "dataset context"
-        prev_context_indices: list of tuples where each tuple has dimension ordered_dataset.shape[1:]
-            each tuple describes the relative location of a pixel to be used for context in each
-            "dataset context" image
-            current_context_indices: list of tuples where each tuple has dimension ordered_dataset.shape[1:]
-            each tuple describes the relative location of a pixel to be used for context
-            in the current image
+            how many images preceeding each element should be considered as
+            "dataset context"
+        prev_context_indices: string
+            string describing the relative location of a pixel to be used
+            for context in each "dataset context" image
+        current_context_indices: string
+            string describing the relative location of a pixel to be used
+            for context in the current image
         should_extract_training_pairs: boolean (default True)
-            whether to compute the training context from the dataset or else load from |training_pairs_filename|
+            whether to compute the training context from the dataset or else
+            load from |training_pairs_filename|
         training_filenames: tuple of (string, string) (default None)
-            if |should_extract_training_pairs|, the locations of the NumPy files from which to
-            load |training_context| and |true_pixels|, respectively
+            if |should_extract_training_pairs|, the locations of the NumPy
+            files from which to load |training_context| and |true_pixels|,
+            respectively
 
     Returns:
         ordered_dataset: numpy array
             unchanged from input
         element_axis: int
             index into ordered_dataset.shape for n_elements
-        (clf, training_context, true_pixels): tuple of (sklearn.linear_model.LinearRegression, ndarray, ndarray)
-            first variable is the learned classifier and
-            second is a vector of length |num_prev_imgs| * len(|prev_context_indices|) + len(|current_context_indices|)
+        (clf, training_context, true_pixels): tuple of
+            (sklearn.linear_model.LinearRegression, ndarray, ndarray)
+            first variable is the learned classifier,
+            second is a vector of length |num_prev_imgs| *
+            len(|prev_context_indices|) + len(|current_context_indices|)
             third is a vector of length at MOST len(|ordered_dataset[0].ravel|)
     '''
+
+    prev_context_indices = name_to_context_pixels(prev_context)
+    current_context_indices = name_to_context_pixels(cur_context)
+
     training_context = None
     true_pixels = None
     if not should_extract_training_pairs:
-        assert training_filenames is not None, "Must pass filenames for training features and labels if not extracting again"
-        training_context = np.load(training_filenames[0], allow_pickle=True) 
-        true_pixels = np.load(training_filenames[1], allow_pickle=True) 
+        assert training_filenames is not None, \
+            "Must pass filenames for training features and labels if not " + \
+            "extracting again."
+        training_context = np.load(training_filenames[0], allow_pickle=True)
+        true_pixels = np.load(training_filenames[1], allow_pickle=True)
     else:
         start = timer()
-        training_context, true_pixels = extract_training_pairs(ordered_dataset, num_prev_imgs, prev_context_indices, current_context_indices)
+        training_context, true_pixels = extract_training_pairs(ordered_dataset,
+            num_prev_imgs, prev_context_indices, current_context_indices)
         end_extraction = timer()
-        print(f'\tExtracted training pairs in {timedelta(seconds=end_extraction-start)}')
+        print(f'\tExtracted training pairs in ' + \
+            f'{timedelta(seconds=end_extraction-start)}.')
         date_str = f'{datetime.now().hour}_{datetime.now().minute}'
         np.save(f'training_context_{date_str}', np.array(training_context))
         np.save(f'true_pixels_{date_str}', np.array(true_pixels))
@@ -161,12 +175,15 @@ def train_linear_predictor(ordered_dataset, num_prev_imgs, prev_context_indices,
     clf = linear_model.LinearRegression()
     clf.fit(training_context, true_pixels)
     end_model_fitting = timer()
-    print(f'\tTrained a linear model in {timedelta(seconds=end_model_fitting-start)}')
-    print('Accuracy: %05f' % clf.score(training_context, true_pixels))
+    print(f'\tTrained a linear model in ' + \
+        f'{timedelta(seconds=end_model_fitting-start)}.')
+    print('\t\t(Accuracy: %05f)' % clf.score(training_context, true_pixels))
     try:
         with open('clf.pickle', 'wb') as f:
             pickle.dump(clf, f)
     except:
         print('\tCouldn\'t pickle clf.')
-    return ordered_dataset, 0, (clf, training_context, true_pixels)
+
+    return ordered_dataset, 0, (clf, training_context, true_pixels,
+        num_prev_imgs, prev_context, cur_context)
 

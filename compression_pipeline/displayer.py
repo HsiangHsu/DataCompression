@@ -7,7 +7,7 @@ Short script to display the input and output data for debugging and testing.
 import numpy as np
 
 
-data_in = np.load('udata_in.npy')
+data_in = np.load('data_in.npy')
 data_out = np.load('data_out.npy')
 
 assert data_in.shape == data_out.shape, \

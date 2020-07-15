@@ -53,28 +53,30 @@ def preprocess(data, args):
             alpha = 1
             while True:
                 try:
-                    # DOI: 0.1016/S0167-7152(02)00421-2 showed k = O(log n) usually
+                    # DOI: 0.1016/S0167-7152(02)00421-2 showed
+                    # k = O(log n) usually
                     # gives connectedness in the k-NN.
-                    ordered_data, _, _ = knn_mst_comp(data, element_axis=0, metric='euclidean',
-                                              minkowski_p=2, k=alpha * int(log(n_elements)))
+                    ordered_data, _, _ = knn_mst_comp(data, element_axis=0,
+                        metric='euclidean', minkowski_p=2,
+                        k=alpha * int(log(n_elements)))
                     break
                 except DisconnectedKNN:
                     alpha *= 10
-                    print("Disconnected kNN. Increasing k to", alpha * int(log(n_elements)))
+                    print("Disconnected kNN. Increasing k to",
+                        alpha * int(log(n_elements)))
             ordered_data = ordered_data.reshape(n_elements, *data.shape[1:])
         elif args.ordering == 'hamiltonian':
             assert False, 'HAMILTONIAN ORDERING IS UNIMPLEMENTED'
         elif args.ordering == 'random':
             rng = default_rng()
             ordered_data = data[rng.permutation(data.shape[0])]
-        prev_context_indices = name_to_context_pixels(args.prev_context)
-        current_context_indices = name_to_context_pixels(args.curr_context)
         if args.feature_file is not None:
-            return train_linear_predictor(ordered_data, args.num_prev_imgs, prev_context_indices,
-                                             current_context_indices, should_extract_training_pairs=False,
-                                             training_filenames=(args.feature_file, args.label_file))
-        return train_linear_predictor(ordered_data, args.num_prev_imgs, prev_context_indices,
-                                          current_context_indices)
+            return train_linear_predictor(ordered_data, args.num_prev_imgs,
+                args.prev_context, args.curr_context,
+                should_extract_training_pairs=False,
+                training_filenames=(args.feature_file, args.label_file))
+        return train_linear_predictor(ordered_data, args.num_prev_imgs,
+            args.prev_context, args.curr_context)
 
 
 def compress(data, element_axis, pre_metadata, args):
@@ -142,7 +144,7 @@ def encode(compression, pre_metadata, comp_metadata, original_shape, args):
             args.video_codec, args.gop_strat, args.image_codec, args.framerate,
             args.grayscale)
     elif encoder == 'pred-huff':
-        pred_huffman_enc(compression, pre_metadata, comp_metadata,
+        pred_huffman_enc(compression, pre_metadata[-3:], comp_metadata,
             original_shape, args)
     elif encoder == 'pred-golomb':
         pred_golomb_enc(compression, pre_metadata, comp_metadata,
@@ -204,7 +206,7 @@ def decompress(compression, comp_metadata, original_shape, args):
     if decompressor == 'knn-mst':
         return knn_mst_decomp(compression, comp_metadata, original_shape)
     elif decompressor == 'predictive':
-        return predictive_decomp(*compression, original_shape)
+        return predictive_decomp(*compression, *comp_metadata, original_shape)
 
 
 def postprocess(decomp, pre_metadata, args):

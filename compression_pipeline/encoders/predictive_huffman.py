@@ -42,6 +42,9 @@ def pred_huffman_enc(compression, pre_metadata, comp_metadata, original_shape,
     n_errors = error_string.shape[0]
     n_residuals = residuals.shape[0]
     b_clf = pickle.dumps(clf)
+    n_prev = pre_metadata[0]
+    pcs = pre_metadata[1]
+    ccs = pre_metadata[2]
 
     # Bytestreams to be built and written
     metastream = b''
@@ -56,6 +59,11 @@ def pred_huffman_enc(compression, pre_metadata, comp_metadata, original_shape,
         metastream += original_shape[i].to_bytes(4, 'little')
     metastream += len(b_clf).to_bytes(4, 'little')
     metastream += b_clf
+    metastream += n_prev.to_bytes(1, 'little')
+    metastream += len(pcs).to_bytes(1, 'little')
+    metastream += pcs.encode()
+    metastream += len(ccs).to_bytes(1, 'little')
+    metastream += ccs.encode()
 
     f = open('comp.out', 'wb')
     metalen = len(metastream)
@@ -171,6 +179,11 @@ def pred_huffman_dec(comp_file):
     clf_len = readint(f, 4)
     b_clf = f.read(clf_len)
     clf = pickle.loads(b_clf)
+    n_prev = readint(f, 1)
+    len_pcs = readint(f, 1)
+    pcs = f.read(len_pcs).decode()
+    len_ccs = readint(f, 1)
+    ccs = f.read(len_ccs).decode()
 
     # Reconstruct Huffman code
 
@@ -238,7 +251,8 @@ def pred_huffman_dec(comp_file):
     error_string = np.array(error_decoded_stream, dtype=dtype)
     residuals = np.array(residual_decoded_stream, dtype=dtype)
 
-    return (error_string, residuals, clf), None, None, original_shape
+    return (error_string, residuals, clf), None, (n_prev, pcs, ccs), \
+        original_shape
 
 
 def huffman_encode(symb2freq):
