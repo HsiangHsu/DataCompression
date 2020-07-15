@@ -111,13 +111,15 @@ def extract_training_pairs(ordered_dataset, num_prev_imgs, prev_context_indices,
             Y_train.append(ordered_dataset[current_img_index][i][j])
     return (X_train, Y_train)
 
-def train_linear_predictor(ordered_dataset, num_prev_imgs,
-    prev_context, cur_context,
-    should_extract_training_pairs=True, training_filenames=None):
+def train_linear_predictor(predictor_family, ordered_dataset, num_prev_imgs,
+    prev_context, cur_context, should_extract_training_pairs=True,
+    training_filenames=None):
     '''
-    Linear regression preprocessor
+    Generalized predictive coding preprocessor
 
     Args:
+        predictor_family: str
+            one of 'linear', 'logistic' for the regression family to compute across training features and labels
         ordered_dataset: numpy array
             data to be preprocessed, of shape (n_elements, n_points)
         num_prev_imgs: int
@@ -152,6 +154,7 @@ def train_linear_predictor(ordered_dataset, num_prev_imgs,
 
     prev_context_indices = name_to_context_pixels(prev_context)
     current_context_indices = name_to_context_pixels(cur_context)
+    assert predictor_family in ['linear', 'logistic'], "Only linear and logistic predictors are currently supported"
 
     training_context = None
     true_pixels = None
@@ -172,10 +175,14 @@ def train_linear_predictor(ordered_dataset, num_prev_imgs,
         np.save(f'training_context_{date_str}', np.array(training_context))
         np.save(f'true_pixels_{date_str}', np.array(true_pixels))
     start = timer()
-    clf = linear_model.LinearRegression()
+    clf = None
+    if predictor_family == 'linear':
+        clf = linear_model.LinearRegression()
+    elif predictor_family == 'logistic':
+        clf = linear_model.LogisticRegression(max_iter=200)
     clf.fit(training_context, true_pixels)
     end_model_fitting = timer()
-    print(f'\tTrained a linear model in ' + \
+    print(f'\tTrained a {predictor_family} model in ' + \
         f'{timedelta(seconds=end_model_fitting-start)}.')
     print('\t\t(Accuracy: %05f)' % clf.score(training_context, true_pixels))
     try:
