@@ -80,8 +80,8 @@ def get_valid_pixels(img_shape, relative_indices):
     relative context indices to be negative-valued in the row or zero in the current row 
     but negative in the column.
     '''
-    err_msg = "Impossible to satisfy passing initial context with these relative indices"
-    assert np.all([index[1] < 0 or (index[1] == 0 and index[0] < 0) for index in relative_indices]), err_msg
+    err_msg = "Impossible to satisfy passing initial context with these relative indices %r"
+    assert np.all([index[0] < 0 or (index[0] == 0 and index[1] < 0) for index in relative_indices]), err_msg % relative_indices
     valid_pixels = []
     min_x = abs(min([index[0] for index in relative_indices]))
     max_x = img_shape[1] - max(0, max([index[0] for index in relative_indices])) - 1
