@@ -70,8 +70,8 @@ def knn_mst_comp(data, element_axis, metric, minkowski_p, k=1000):
         unique_data, unique_indices = np.unique(data[i], axis=0,
             return_index=True)
 
-        knn_graph = kneighbors_graph(unique_data,
-            min(len(unique_data)-1, k),
+        k = min(len(unique_data)-1, k)
+        knn_graph = kneighbors_graph(unique_data, k,
             metric=metric, p=minkowski_p, mode='distance', n_jobs=-1)
 
         if connected_components(knn_graph, directed=False, \
@@ -79,7 +79,7 @@ def knn_mst_comp(data, element_axis, metric, minkowski_p, k=1000):
             raise DisconnectedKNN("KNN graph is disconnected. Increase K.")
 
         end = timer()
-        print(f'\tknn_graph in {timedelta(seconds=end-start)}.')
+        print(f'\t{k}-nn_graph in {timedelta(seconds=end-start)}.')
         start = timer()
 
         mst = minimum_spanning_tree(knn_graph, overwrite=True)
