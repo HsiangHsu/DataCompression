@@ -64,7 +64,6 @@ def pred_huffman_enc(compression, pre_metadata, comp_metadata, original_shape,
 
     # Generate Huffman code for error string
     freqs = get_freqs(error_string)
-    print(freqs)
     raw_code = huffman_encode(freqs)
     n_error_symbols = len(raw_code)
     error_code = dict(raw_code)
@@ -101,23 +100,33 @@ def pred_huffman_enc(compression, pre_metadata, comp_metadata, original_shape,
     f.write(residual_codestream)
 
     # Generate Huffman coded bitstream for data on this layer
-    bitstream = ''
+    error_bitstream = ''
     for error in error_string:
-        bitstream += error_code[error]
+        error_bitstream += error_code[error]
+    error_padded_length = 8*ceil(len(error_bitstream)/8)
+    error_padding = error_padded_length - len(error_bitstream);
+    error_bitstream = f'{error_bitstream:0<{error_padded_length}}'
+    error_bytestream = [int(error_bitstream[8*j:8*(j+1)], 2)
+        for j in range(len(error_bitstream)//8)]
+
+    residual_bitstream = ''
     for residual in residuals:
-        bitstream += residual_code[residual]
-    padded_length = 8*ceil(len(bitstream)/8)
-    padding = padded_length - len(bitstream);
-    bitstream = f'{bitstream:0<{padded_length}}'
-    bytestream = [int(bitstream[8*j:8*(j+1)], 2)
-        for j in range(len(bitstream)//8)]
+        residual_bitstream += residual_code[residual]
+    residual_padded_length = 8*ceil(len(residual_bitstream)/8)
+    residual_padding = residual_padded_length - len(residual_bitstream);
+    residual_bitstream = f'{residual_bitstream:0<{residual_padded_length}}'
+    residual_bytestream = [int(residual_bitstream[8*j:8*(j+1)], 2)
+        for j in range(len(residual_bitstream)//8)]
 
     # The first element is not Huffman coded because it is not a delta
-    bytestreamlen = len(bytestream)+5
+    bytestreamlen = len(error_bytestream+residual_bytestream)+5
     print(f'\tBytestream: {bytestreamlen} bytes')
-    f.write(len(bytestream).to_bytes(4, 'little'))
-    f.write(padding.to_bytes(1, 'little'))
-    f.write(bytes(bytestream))
+    f.write(len(error_bytestream).to_bytes(4, 'little'))
+    f.write(error_padding.to_bytes(1, 'little'))
+    f.write(bytes(error_bytestream))
+    f.write(len(residual_bytestream).to_bytes(4, 'little'))
+    f.write(residual_padding.to_bytes(1, 'little'))
+    f.write(bytes(residual_bytestream))
 
     print(f'\tTotal len: {metalen+codelen+bytestreamlen}\n')
 
@@ -127,7 +136,7 @@ def pred_huffman_enc(compression, pre_metadata, comp_metadata, original_shape,
         pickle.dump(args, f)
 
 
-def delta_huffman_dec(comp_file):
+def pred_huffman_dec(comp_file):
     '''
     Delta Vector and Huffman Encoding Decoder
 
@@ -150,91 +159,86 @@ def delta_huffman_dec(comp_file):
     f = open(comp_file, 'rb')
 
     # Read in sizing and and datatype metadata to reconstruct arrays.
-    n_layers = readint(f, 4)
-    n_elements = readint(f, 4)
-    n_points = readint(f, 4)
-    comp_dtype = np.dtype(chr(readint(f, 1)))
+    n_errors = readint(f, 4)
+    n_residuals = readint(f, 4)
+    dtype = np.dtype(chr(readint(f, 1)))
+    dsize = dtype.itemsize
     original_shape_len = readint(f, 1)
     shape_values = []
     for i in range(original_shape_len):
         shape_values.append(readint(f, 4))
     original_shape = tuple(shape_values)
+    clf_len = readint(f, 4)
+    b_clf = f.read(clf_len)
+    clf = pickle.loads(b_clf)
 
-    data_size = comp_dtype.itemsize
+    # Reconstruct Huffman code
 
-    pre_meta_included = readint(f, 1)
-    if pre_meta_included:
-        pre_meta_shape_len = readint(f, 1)
-        pre_meta_shape_values = []
-        for i in range(pre_meta_shape_len):
-            pre_meta_shape_values.append(readint(f, 4))
-        pre_meta_shape = tuple(pre_meta_shape_values)
-        pre_meta_dtype = np.dtype(chr(readint(f, 1)))
-        pre_meta_size = pre_meta_dtype.itemsize
-        to_read = np.prod(pre_meta_shape) * pre_meta_dtype.itemsize
-        pre_metadata = np.frombuffer(f.read(to_read), dtype=pre_meta_dtype)
-        pre_metadata = pre_metadata.reshape(pre_meta_shape)
-    else:
-        pre_metadata = None
+    error_codestream_len = readint(f, 4)
+    residual_codestream_len = readint(f, 4)
+    symbol_len = readint(f, 1)
+    error_code_len = readint(f, 1)
+    residual_code_len = readint(f, 1)
 
-    comp_meta_included = readint(f, 1)
-    if comp_meta_included:
-        comp_meta_dtype = np.dtype(chr(readint(f, 1)))
-        comp_meta_size = comp_meta_dtype.itemsize
-        comp_metadata = np.empty((n_layers, n_elements), dtype=comp_meta_dtype)
-        for i in range(n_layers):
-            for j in range(n_elements):
-                metadata[i][j] = readint(f, comp_meta_size)
-    else:
-        comp_metadata = None
+    # Error codestream
+    codebytes_read = 0
+    raw_code = []
+    while codebytes_read < error_codestream_len:
+        raw_code.append([readint(f, symbol_len), readint(f, error_code_len)])
+        codebytes_read += symbol_len + error_code_len
+    error_code = deepcopy(raw_code)
+    codelen = raw_code[0][1]
+    code = f'{0:0{codelen}b}'
+    error_code[0][1] = code
+    for k in range(1, len(raw_code)):
+        codelen = raw_code[k][1]
+        code = int(code, 2) + 1
+        code = code << (codelen - raw_code[k-1][1])
+        code = f'{code:0{codelen}b}'
+        error_code[k][1] = code
 
-    compression = np.empty((n_layers, n_elements, n_points), dtype=comp_dtype)
+    # Residual codestream
+    codebytes_read = 0
+    raw_code = []
+    while codebytes_read < residual_codestream_len:
+        raw_code.append([readint(f, symbol_len),
+            readint(f, residual_code_len)])
+        codebytes_read += symbol_len + residual_code_len
+    residual_code = deepcopy(raw_code)
+    codelen = raw_code[0][1]
+    code = f'{0:0{codelen}b}'
+    residual_code[0][1] = code
+    for k in range(1, len(raw_code)):
+        codelen = raw_code[k][1]
+        code = int(code, 2) + 1
+        code = code << (codelen - raw_code[k-1][1])
+        code = f'{code:0{codelen}b}'
+        residual_code[k][1] = code
 
-    for i in range(n_layers):
-        codestream_len = readint(f, 4)
-        symbol_len = readint(f, 1)
-        code_len = readint(f, 1)
+    error_bytestream_len = readint(f, 4)
+    error_padding_bits = readint(f, 1)
+    error_bitstream_len = error_bytestream_len*8 - error_padding_bits
+    error_bytestream = f.read(error_bytestream_len)
 
-        # Reconstruct Huffman code
-        codebytes_read = 0
-        raw_code = []
-        while codebytes_read < codestream_len:
-            raw_code.append([readint(f, symbol_len), readint(f, code_len)])
-            codebytes_read += symbol_len + code_len
-        reconstructed_code = deepcopy(raw_code)
-        codelen = raw_code[0][1]
-        code = f'{0:0{codelen}b}'
-        reconstructed_code[0][1] = code
-        for k in range(1, len(raw_code)):
-            codelen = raw_code[k][1]
-            code = int(code, 2) + 1
-            code = code << (codelen - raw_code[k-1][1])
-            code = f'{code:0{codelen}b}'
-            reconstructed_code[k][1] = code
+    residual_bytestream_len = readint(f, 4)
+    residual_padding_bits = readint(f, 1)
+    residual_bitstream_len = residual_bytestream_len*8 - residual_padding_bits
+    residual_bytestream = f.read(residual_bytestream_len)
 
-        bytestream_len = readint(f, 4)
-        padding_bits = readint(f, 1)
-        bitstream_len = bytestream_len*8 - padding_bits
-        bytestream = f.read(bytestream_len)
+    error_string = np.empty((n_errors,), dtype=dtype)
+    residuals = np.empty((n_residuals,), dtype=dtype)
 
-        for j in range(n_points):
-            compression[i][0][j] = readint(f, data_size)
+    error_decodings = {v: k for k, v in dict(error_code).items()}
+    residual_decodings = {v: k for k, v in dict(residual_code).items()}
+    error_decoded_stream = huffman_decode(error_bytestream,
+        error_bitstream_len, error_decodings)
+    residual_decoded_stream = huffman_decode(residual_bytestream,
+        residual_bitstream_len, residual_decodings)
 
-        # Corner case where there is no difference across layer
-        if bytestream_len == 0:
-            for j in range(1, n_elements):
-                compression[i][j] = compression[i][0]
-            continue
+    error_string = np.array(error_decoded_stream, dtype=dtype)
+    residuals = np.array(residual_decoded_stream, dtype=dtype)
 
-        decodings = {v: k for k, v in dict(reconstructed_code).items()}
-        decoded_stream = huffman_decode(bytestream, bitstream_len, decodings)
-        deltas = np.array(decoded_stream, dtype=comp_dtype)
-        deltas = deltas.reshape(n_elements-1, n_points)
-
-        for j in range(1, n_elements):
-            compression[i][j] = compression[i][j-1] + deltas[j-1]
-
-    return compression, pre_metadata, comp_metadata, original_shape
+    return (error_string, residuals, clf), None, None, original_shape
 
 
 def huffman_encode(symb2freq):
