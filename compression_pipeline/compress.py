@@ -46,6 +46,9 @@ pre_group.add_argument('--bsz', type=int, default=10,
 #   A B C
 #   D X E
 #   F G H
+pre_group.add_argument('--predictor-family', type=str, default='linear', 
+    dest='predictor_family', choices=['linear', 'logistic'], 
+    help='model class to use for predicting pixels')
 pixel_context_strategies = ['DAB', 'DABC']
 pre_group.add_argument('--ordering', type=str, default='random',
     choices=['random', 'mst', 'hamiltonian'],

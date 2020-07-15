@@ -1,7 +1,7 @@
 from preprocessors.sqpatch import sqpatch_pre, sqpatch_post
 from preprocessors.rgb import rgb_pre, rgb_post
 from preprocessors.dict import dict_pre, dict_post
-from preprocessors.predictive import train_linear_predictor, name_to_context_pixels
+from preprocessors.predictive import train_predictor, name_to_context_pixels
 
 from compressors.knn_mst import knn_mst_comp, knn_mst_decomp, DisconnectedKNN
 from compressors.knn_mst import knn_mst_comp, knn_mst_decomp
@@ -70,11 +70,12 @@ def preprocess(data, args):
         prev_context_indices = name_to_context_pixels(args.prev_context)
         current_context_indices = name_to_context_pixels(args.curr_context)
         if args.feature_file is not None:
-            return train_linear_predictor(ordered_data, args.num_prev_imgs, prev_context_indices, 
-                                             current_context_indices, should_extract_training_pairs=False,
-                                             training_filenames=(args.feature_file, args.label_file))
-        return train_linear_predictor(ordered_data, args.num_prev_imgs, prev_context_indices, 
-                                          current_context_indices)
+            return train_predictor(args.predictor_family, ordered_data, args.num_prev_imgs,
+                                   prev_context_indices, current_context_indices, 
+                                   should_extract_training_pairs=False, 
+                                   training_filenames=(args.feature_file, args.label_file))
+        return train_predictor(args.predictor_family, ordered_data, args.num_prev_imgs, 
+                               prev_context_indices, current_context_indices)
 
 
 def compress(data, element_axis, pre_metadata, args):
