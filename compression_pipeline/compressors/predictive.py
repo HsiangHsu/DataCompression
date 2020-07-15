@@ -1,5 +1,5 @@
 '''
-knn_mst.py
+predictive.py
 
 This module contains helper functions for implementing the predictive coding
 compressor.
@@ -19,8 +19,8 @@ def predictive_comp(data, element_axis, predictor, training_context,
     true_pixels):
     with open('clf.pickle', 'rb') as f:
         clf = pickle.load(f)
-    training_context = np.load('training_context.npy')
-    true_pixels = np.load('true_pixels.npy')
+    assert training_context is not None
+    assert true_pixels is not None
     estimated_pixels = clf.predict(training_context)
     estimated_pixels = np.clip(estimated_pixels, 0, 255).astype(np.uint8)
     error_string = true_pixels - estimated_pixels
@@ -35,8 +35,7 @@ def predictive_comp(data, element_axis, predictor, training_context,
         residuals = np.append(residuals, img[0,:])
         residuals = np.append(residuals, img[1:,0])
 
-    assert residuals.shape[0] + error_string.shape[0] == np.prod(data.shape)
-    exit()
+    assert(residuals.shape[0] + error_string.shape[0] == np.prod(data.shape))
 
     return (error_string, residuals, clf), None, data.shape
 

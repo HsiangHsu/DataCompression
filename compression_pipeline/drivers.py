@@ -1,8 +1,9 @@
 from preprocessors.sqpatch import sqpatch_pre, sqpatch_post
 from preprocessors.rgb import rgb_pre, rgb_post
 from preprocessors.dict import dict_pre, dict_post
-from preprocessors.predictive import train_lasso_predictor
+from preprocessors.predictive import train_linear_predictor, name_to_context_pixels
 
+from compressors.knn_mst import knn_mst_comp, knn_mst_decomp, DisconnectedKNN
 from compressors.knn_mst import knn_mst_comp, knn_mst_decomp
 from compressors.predictive import predictive_comp, predictive_decomp
 
@@ -49,19 +50,31 @@ def preprocess(data, args):
         ordered_data =  None
         n_elements = data.shape[0]
         if args.ordering == 'mst':
-            ordered_data, _, _ = knn_mst_comp(data, element_axis=0,
-                metric='euclidean', minkowski_p=2, k=3 * int(log(n_elements)))
+            alpha = 1
+            while True:
+                try:
+                    # DOI: 0.1016/S0167-7152(02)00421-2 showed k = O(log n) usually
+                    # gives connectedness in the k-NN.
+                    ordered_data, _, _ = knn_mst_comp(data, element_axis=0, metric='euclidean',
+                                              minkowski_p=2, k=alpha * int(log(n_elements)))
+                    break
+                except DisconnectedKNN:
+                    alpha *= 10
+                    print("Disconnected kNN. Increasing k to", alpha * int(log(n_elements)))
             ordered_data = ordered_data.reshape(n_elements, *data.shape[1:])
         elif args.ordering == 'hamiltonian':
             assert False, 'HAMILTONIAN ORDERING IS UNIMPLEMENTED'
         elif args.ordering == 'random':
-            # TODO: Skip this for now for repeatability
-            # rng = default_rng()
-            # ordered_data = data[rng.permutation(data.shape[0])]
-            ordered_data =  data
-        context_indices = [(-1, -1), (-1, 0), (0, -1)]
-        return train_lasso_predictor(ordered_data, 2, context_indices,
-            context_indices)
+            rng = default_rng()
+            ordered_data = data[rng.permutation(data.shape[0])]
+        prev_context_indices = name_to_context_pixels(args.prev_context)
+        current_context_indices = name_to_context_pixels(args.curr_context)
+        if args.feature_file is not None:
+            return train_linear_predictor(ordered_data, args.num_prev_imgs, prev_context_indices,
+                                             current_context_indices, should_extract_training_pairs=False,
+                                             training_filenames=(args.feature_file, args.label_file))
+        return train_linear_predictor(ordered_data, args.num_prev_imgs, prev_context_indices,
+                                          current_context_indices)
 
 
 def compress(data, element_axis, pre_metadata, args):

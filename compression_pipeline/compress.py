@@ -42,9 +42,26 @@ pre_group.add_argument('--niter', type=int, default=100,
     help='number of mini-batch iterations')
 pre_group.add_argument('--bsz', type=int, default=10,
     help='mini-batch size')
+# For predictive coding in predicting pixel X in
+#   A B C
+#   D X E
+#   F G H
+pixel_context_strategies = ['DAB', 'DABC']
 pre_group.add_argument('--ordering', type=str, default='random',
     choices=['random', 'mst', 'hamiltonian'],
     help='dataset ordering strategy for predictive coding')
+pre_group.add_argument('--prev-context', type=str, default='DAB',
+    dest='prev_context', choices = pixel_context_strategies,
+    help='context pixels for predictive coding prior images')
+pre_group.add_argument('--current-context', type=str, default='DAB',
+    dest='curr_context', choices = pixel_context_strategies,
+    help='context pixels for predictive coding current image')
+pre_group.add_argument('--num-prev-imgs', type=int, default=2,
+    dest='num_prev_imgs')
+pre_group.add_argument('--feature-file', type=str, dest='feature_file', 
+    required=False)
+pre_group.add_argument('--label-file', type=str, dest='label_file', 
+    required=False)
 
 comp_group = parser.add_argument_group('compressor')
 comp_group.add_argument('--comp', type=str, choices=['knn-mst', 'predictive'],
@@ -105,6 +122,10 @@ for arg in (args.pre, args.comp, args.enc):
                 assert arg_2 in ['predictive', 'pred-huff', 'pred-golomb']
             except AssertionError:
                 parser.error('Must use predictive options for all fields')
+if args.num_prev_imgs < 0:
+    parser.error("Must specify non-negative number of previous images for predictive coding")
+if (args.feature_file is None and args.label_file is not None) or (args.feature_file is not None and args.label_file is None):
+    paser.error("Must specify both training feature and label files if not extracting from dataset")
 
 full_start = timer()
 
