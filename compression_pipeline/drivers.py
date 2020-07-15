@@ -4,11 +4,11 @@ from preprocessors.dict import dict_pre, dict_post
 from preprocessors.predictive import train_lasso_predictor
 
 from compressors.knn_mst import knn_mst_comp, knn_mst_decomp
-from compressors.predictive import predictive_comp
+from compressors.predictive import predictive_comp, predictive_decomp
 
 from encoders.delta_coo import delta_coo_enc, delta_coo_dec
 from encoders.delta_huffman import delta_huffman_enc, delta_huffman_dec
-from encoders.predictive_huffman import pred_huffman_enc
+from encoders.predictive_huffman import pred_huffman_enc, pred_huffman_dec
 from encoders.predictive_golomb import pred_golomb_enc
 from encoders.video import video_enc
 
@@ -49,8 +49,8 @@ def preprocess(data, args):
         ordered_data =  None
         n_elements = data.shape[0]
         if args.ordering == 'mst':
-            ordered_data, _, _ = knn_mst_comp(data, element_axis=0, metric='euclidean',
-                                              minkowski_p=2, k=3 * int(log(n_elements)))
+            ordered_data, _, _ = knn_mst_comp(data, element_axis=0,
+                metric='euclidean', minkowski_p=2, k=3 * int(log(n_elements)))
             ordered_data = ordered_data.reshape(n_elements, *data.shape[1:])
         elif args.ordering == 'hamiltonian':
             assert False, 'HAMILTONIAN ORDERING IS UNIMPLEMENTED'
@@ -163,6 +163,8 @@ def decode(comp_file, args):
         return delta_coo_dec(comp_file)
     elif decoder == 'delta-huff':
         return delta_huffman_dec(comp_file)
+    elif decoder == 'pred-huff':
+        return pred_huffman_dec(comp_file)
 
 
 def decompress(compression, comp_metadata, original_shape, args):
@@ -188,6 +190,8 @@ def decompress(compression, comp_metadata, original_shape, args):
 
     if decompressor == 'knn-mst':
         return knn_mst_decomp(compression, comp_metadata, original_shape)
+    elif decompressor == 'predictive':
+        return predictive_decomp(*compression, original_shape)
 
 
 def postprocess(decomp, pre_metadata, args):
@@ -217,3 +221,5 @@ def postprocess(decomp, pre_metadata, args):
         return rgb_post(sqpatch_post(decomp))
     elif postprocessor == 'dict':
         return dict_post(decomp, pre_metadata)
+    elif postprocessor == 'predictive':
+        return decomp
