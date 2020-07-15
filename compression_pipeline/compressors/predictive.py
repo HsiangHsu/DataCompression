@@ -19,12 +19,8 @@ def predictive_comp(data, element_axis, predictor, training_context,
     true_pixels):
     with open('clf.pickle', 'rb') as f:
         clf = pickle.load(f)
-    try:
-        training_context = np.load('training_context.npy')
-        true_pixels = np.load('true_pixels.npy')
-    except FileNotFoundError:
-        assert training_context is not None
-        assert true_pixels is not None
+    assert training_context is not None
+    assert true_pixels is not None
     estimated_pixels = clf.predict(training_context)
     estimated_pixels = np.clip(estimated_pixels, 0, 255).astype(np.uint8)
     error_string = true_pixels - estimated_pixels

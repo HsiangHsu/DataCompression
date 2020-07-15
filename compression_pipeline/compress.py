@@ -58,6 +58,10 @@ pre_group.add_argument('--current-context', type=str, default='DAB',
     help='context pixels for predictive coding current image')
 pre_group.add_argument('--num-prev-imgs', type=int, default=2,
     dest='num_prev_imgs')
+pre_group.add_argument('--feature-file', type=str, dest='feature_file', 
+    required=False)
+pre_group.add_argument('--label-file', type=str, dest='label_file', 
+    required=False)
 
 comp_group = parser.add_argument_group('compressor')
 comp_group.add_argument('--comp', type=str, choices=['knn-mst', 'predictive'],
@@ -120,7 +124,9 @@ for arg in (args.pre, args.comp, args.enc):
                 parser.error('Must use predictive options for all fields')
 if args.num_prev_imgs < 0:
     parser.error("Must specify non-negative number of previous images for predictive coding")
-    
+if (args.feature_file is None and args.label_file is not None) or (args.feature_file is not None and args.label_file is None):
+    paser.error("Must specify both training feature and label files if not extracting from dataset")
+
 full_start = timer()
 
 start = timer()
