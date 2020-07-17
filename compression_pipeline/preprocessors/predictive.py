@@ -113,10 +113,8 @@ def extract_training_pairs(ordered_dataset, num_prev_imgs, prev_context_indices,
     return (X_train, Y_train)
 
 def __compute_classifier_accuracy(clf, predictor_family, training_context, true_pixels):
-    if predictor_family == 'logistic':
-        return clf.score(training_context, true_pixels)
-    elif predictor_family == 'linear':
-        n_samples_float = 1.0 * training_context.shape[0]
+    if predictor_family == 'logistic' or predictor_family == 'linear':
+        n_samples_float = 1.0 * len(true_pixels)
         return 1 - np.count_nonzero(np.round(clf.predict(training_context)) - true_pixels) / n_samples_float
     assert False, 'Must be a logistic or linear predictor to compute accuracy'
 
@@ -185,7 +183,6 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs, prev_conte
         clf = linear_model.LinearRegression()
     elif predictor_family == 'logistic':
         training_context = csr_matrix(training_context)
-        true_pixels = csr_matrix(true_pixels)
         clf = linear_model.SGDClassifier(loss='log')
     clf.fit(training_context, true_pixels)
     end_model_fitting = timer()
