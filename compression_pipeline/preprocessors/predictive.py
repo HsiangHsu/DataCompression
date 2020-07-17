@@ -5,6 +5,7 @@ This module contains the Predictive Coding preprocessor.
 '''
 import numpy as np
 from sklearn import linear_model
+from scipy.sparse import csr_matrix
 
 from datetime import timedelta, datetime
 from timeit import default_timer as timer
@@ -111,9 +112,16 @@ def extract_training_pairs(ordered_dataset, num_prev_imgs, prev_context_indices,
             Y_train.append(ordered_dataset[current_img_index][i][j])
     return (X_train, Y_train)
 
-def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
-    prev_context, cur_context, should_extract_training_pairs=True,
-    training_filenames=None):
+def __compute_classifier_accuracy(clf, predictor_family, training_context, true_pixels):
+    if predictor_family == 'logistic':
+        return clf.score(training_context, true_pixels)
+    elif predictor_family == 'linear':
+        n_samples_float = 1.0 * training_context.shape[0]
+        return 1 - np.count_nonzero(np.round(clf.predict(training_context)) - true_pixels) / n_samples_float
+    assert False, 'Must be a logistic or linear predictor to compute accuracy'
+
+def train_predictor(predictor_family, ordered_dataset, num_prev_imgs, prev_context_indices, current_context_indices,
+                    should_extract_training_pairs=True, training_filenames=None):
     '''
     Generalized predictive coding preprocessor
 
@@ -159,11 +167,9 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
     training_context = None
     true_pixels = None
     if not should_extract_training_pairs:
-        assert training_filenames is not None, \
-            "Must pass filenames for training features and labels if not " + \
-            "extracting again."
-        training_context = np.load(training_filenames[0], allow_pickle=True)
-        true_pixels = np.load(training_filenames[1], allow_pickle=True)
+        assert training_filenames is not None, "Must pass filenames for training features and labels if not extracting again"
+        training_context = np.load(training_filenames[0], allow_pickle=True, mmap_mode='r') 
+        true_pixels = np.load(training_filenames[1], allow_pickle=True, mmap_mode='r') 
     else:
         start = timer()
         training_context, true_pixels = extract_training_pairs(ordered_dataset,
@@ -179,13 +185,13 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
     if predictor_family == 'linear':
         clf = linear_model.LinearRegression()
     elif predictor_family == 'logistic':
-        clf = linear_model.LogisticRegression(max_iter=200)
+        training_context = csr_matrix(training_context)
+        true_pixels = csr_matrix(true_pixels)
+        clf = linear_model.SGDClassifier(loss='log')
     clf.fit(training_context, true_pixels)
     end_model_fitting = timer()
     print(f'\tTrained a {predictor_family} model in ' + \
         f'{timedelta(seconds=end_model_fitting-start)}.')
-    print('\t\t(Accuracy: %05f)\n' % clf.score(training_context, true_pixels))
-
+    print('\t\t(Accuracy: %05f)\n' %  __compute_classifier_accuracy(clf, predictor_family, training_context, true_pixels))
     return ordered_dataset, 0, (clf, training_context, true_pixels,
         num_prev_imgs, prev_context, cur_context)
-
