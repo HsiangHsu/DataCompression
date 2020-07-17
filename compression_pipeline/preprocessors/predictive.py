@@ -5,6 +5,7 @@ This module contains the Predictive Coding preprocessor.
 '''
 import numpy as np
 from sklearn import linear_model
+from scipy.sparse import csr_matrix
 
 from datetime import timedelta, datetime
 from timeit import default_timer as timer
@@ -111,9 +112,14 @@ def extract_training_pairs(ordered_dataset, num_prev_imgs, prev_context_indices,
             Y_train.append(ordered_dataset[current_img_index][i][j])
     return (X_train, Y_train)
 
-def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
-    prev_context, cur_context, should_extract_training_pairs=True,
-    training_filenames=None):
+def __compute_classifier_accuracy(clf, predictor_family, training_context, true_pixels):
+    if predictor_family == 'logistic' or predictor_family == 'linear':
+        n_samples_float = 1.0 * len(true_pixels)
+        return 1 - np.count_nonzero(np.round(clf.predict(training_context)) - true_pixels) / n_samples_float
+    assert False, 'Must be a logistic or linear predictor to compute accuracy'
+
+def train_predictor(predictor_family, ordered_dataset, num_prev_imgs, prev_context, cur_context,
+                    should_extract_training_pairs=True, training_filenames=None):
     '''
     Generalized predictive coding preprocessor
 
@@ -145,13 +151,12 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
         element_axis: int
             index into ordered_dataset.shape for n_elements
         (clf, training_context, true_pixels): tuple of
-            (sklearn.linear_model.LinearRegression, ndarray, ndarray)
+            (sklearn.linear_model, ndarray, ndarray)
             first variable is the learned classifier,
             second is a vector of length |num_prev_imgs| *
-            len(|prev_context_indices|) + len(|current_context_indices|)
+            len(|prev_context|) + len(|cur_context|)
             third is a vector of length at MOST len(|ordered_dataset[0].ravel|)
     '''
-
     prev_context_indices = name_to_context_pixels(prev_context)
     current_context_indices = name_to_context_pixels(cur_context)
     assert predictor_family in ['linear', 'logistic'], "Only linear and logistic predictors are currently supported"
@@ -159,11 +164,9 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
     training_context = None
     true_pixels = None
     if not should_extract_training_pairs:
-        assert training_filenames is not None, \
-            "Must pass filenames for training features and labels if not " + \
-            "extracting again."
-        training_context = np.load(training_filenames[0], allow_pickle=True)
-        true_pixels = np.load(training_filenames[1], allow_pickle=True)
+        assert training_filenames is not None, "Must pass filenames for training features and labels if not extracting again"
+        training_context = np.load(training_filenames[0], allow_pickle=True, mmap_mode='r') 
+        true_pixels = np.load(training_filenames[1], allow_pickle=True, mmap_mode='r') 
     else:
         start = timer()
         training_context, true_pixels = extract_training_pairs(ordered_dataset,
@@ -179,13 +182,12 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
     if predictor_family == 'linear':
         clf = linear_model.LinearRegression()
     elif predictor_family == 'logistic':
-        clf = linear_model.LogisticRegression(max_iter=200)
+        training_context = csr_matrix(training_context)
+        clf = linear_model.SGDClassifier(loss='log')
     clf.fit(training_context, true_pixels)
     end_model_fitting = timer()
     print(f'\tTrained a {predictor_family} model in ' + \
         f'{timedelta(seconds=end_model_fitting-start)}.')
-    print('\t\t(Accuracy: %05f)\n' % clf.score(training_context, true_pixels))
-
+    print('\t\t(Accuracy: %05f)\n' %  __compute_classifier_accuracy(clf, predictor_family, training_context, true_pixels))
     return ordered_dataset, 0, (clf, training_context, true_pixels,
         num_prev_imgs, prev_context, cur_context)
-
