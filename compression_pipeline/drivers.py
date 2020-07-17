@@ -69,7 +69,7 @@ def preprocess(data, args):
             assert False, 'HAMILTONIAN ORDERING IS UNIMPLEMENTED'
         elif args.ordering == 'random':
             rng = default_rng()
-            ordered_data = data[rng.permutation(data.shape[0])]
+            ordered_data = data[rng.permutation(n_elements)]
         if args.feature_file is not None:
             return train_predictor(args.predictor_family, ordered_data,
                 args.num_prev_imgs, args.prev_context, args.curr_context,

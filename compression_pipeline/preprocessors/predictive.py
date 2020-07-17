@@ -120,7 +120,7 @@ def __compute_classifier_accuracy(clf, predictor_family, training_context, true_
         return 1 - np.count_nonzero(np.round(clf.predict(training_context)) - true_pixels) / n_samples_float
     assert False, 'Must be a logistic or linear predictor to compute accuracy'
 
-def train_predictor(predictor_family, ordered_dataset, num_prev_imgs, prev_context_indices, current_context_indices,
+def train_predictor(predictor_family, ordered_dataset, num_prev_imgs, prev_context, cur_context,
                     should_extract_training_pairs=True, training_filenames=None):
     '''
     Generalized predictive coding preprocessor
@@ -133,10 +133,10 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs, prev_conte
         num_prev_imgs: int
             how many images preceeding each element should be considered as
             "dataset context"
-        prev_context_indices: string
+        prev_context: string
             string describing the relative location of a pixel to be used
             for context in each "dataset context" image
-        current_context_indices: string
+        cur_context: string
             string describing the relative location of a pixel to be used
             for context in the current image
         should_extract_training_pairs: boolean (default True)
@@ -153,13 +153,12 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs, prev_conte
         element_axis: int
             index into ordered_dataset.shape for n_elements
         (clf, training_context, true_pixels): tuple of
-            (sklearn.linear_model.LinearRegression, ndarray, ndarray)
+            (sklearn.linear_model, ndarray, ndarray)
             first variable is the learned classifier,
             second is a vector of length |num_prev_imgs| *
-            len(|prev_context_indices|) + len(|current_context_indices|)
+            len(|prev_context|) + len(|cur_context|)
             third is a vector of length at MOST len(|ordered_dataset[0].ravel|)
     '''
-
     prev_context_indices = name_to_context_pixels(prev_context)
     current_context_indices = name_to_context_pixels(cur_context)
     assert predictor_family in ['linear', 'logistic'], "Only linear and logistic predictors are currently supported"
