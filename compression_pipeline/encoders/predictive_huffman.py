@@ -10,6 +10,7 @@ from heapq import heappush, heappop, heapify
 from math import ceil, log2
 import numpy as np
 import pickle
+from sklearn import linear_model
 
 from utilities import readint
 
@@ -41,7 +42,6 @@ def pred_huffman_enc(compression, pre_metadata, comp_metadata, original_shape,
     error_string, residuals, clf = compression
     n_errors = error_string.shape[0]
     n_residuals = residuals.shape[0]
-    b_clf = pickle.dumps(clf)
     n_prev = pre_metadata[0]
     pcs = pre_metadata[1]
     ccs = pre_metadata[2]
@@ -57,8 +57,7 @@ def pred_huffman_enc(compression, pre_metadata, comp_metadata, original_shape,
     metastream += len(original_shape).to_bytes(1, 'little')
     for i in range(len(original_shape)):
         metastream += original_shape[i].to_bytes(4, 'little')
-    metastream += len(b_clf).to_bytes(4, 'little')
-    metastream += b_clf
+    metastream = encode_predictor(metastream, clf)
     metastream += n_prev.to_bytes(1, 'little')
     metastream += len(pcs).to_bytes(1, 'little')
     metastream += pcs.encode()
@@ -164,6 +163,7 @@ def pred_huffman_dec(comp_file):
         original_shape: tuple
             shape of original data
     '''
+
     f = open(comp_file, 'rb')
 
     # Read in sizing and and datatype metadata to reconstruct arrays.
@@ -176,9 +176,7 @@ def pred_huffman_dec(comp_file):
     for i in range(original_shape_len):
         shape_values.append(readint(f, 4))
     original_shape = tuple(shape_values)
-    clf_len = readint(f, 4)
-    b_clf = f.read(clf_len)
-    clf = pickle.loads(b_clf)
+    clf = decode_predictor(f)
     n_prev = readint(f, 1)
     len_pcs = readint(f, 1)
     pcs = f.read(len_pcs).decode()
@@ -305,3 +303,68 @@ def get_freqs(values):
         except KeyError:
             freqs[val] = 1
     return freqs
+
+def encode_predictor(metastream, clf):
+    pred_name = str(clf).split('(')[0]
+
+    metastream += len(pred_name).to_bytes(1, 'little')
+    metastream += pred_name.encode()
+
+    b_coef = clf.coef_.tobytes()
+    metastream += len(b_coef).to_bytes(2, 'little')
+    metastream += b_coef
+    metastream += len(clf.coef_.shape).to_bytes(1, 'little')
+    for i in range(len(clf.coef_.shape)):
+        metastream += clf.coef_.shape[i].to_bytes(2, 'little')
+
+    b_intercept = clf.intercept_.tobytes()
+    metastream += len(b_intercept).to_bytes(2, 'little')
+    metastream += b_intercept
+    metastream += len(clf.intercept_.shape).to_bytes(1, 'little')
+    for i in range(len(clf.intercept_.shape)):
+        metastream += clf.intercept_.shape[i].to_bytes(2, 'little')
+
+    if pred_name == 'LogisticRegression':
+        b_classes = clf.classes_.tobytes()
+        metastream += len(b_classes).to_bytes(2, 'little')
+        metastream += b_classes
+
+    return metastream
+
+def decode_predictor(f):
+    predictors = {'LinearRegression':linear_model.LinearRegression,
+        'LogisticRegression':linear_model.LogisticRegression}
+
+    len_pred_name = readint(f, 1)
+    pred_name = f.read(len_pred_name).decode()
+
+    len_b_coef = readint(f, 2)
+    b_coef = f.read(len_b_coef)
+    len_coef_shape = readint(f, 1)
+    shape_values = []
+    for i in range(len_coef_shape):
+        shape_values.append(readint(f, 2))
+    coef_shape = tuple(shape_values)
+    coef = np.frombuffer(b_coef).reshape(coef_shape)
+
+    len_b_intercept = readint(f, 2)
+    b_intercept = f.read(len_b_intercept)
+    len_intercept_shape = readint(f, 1)
+    shape_values = []
+    for i in range(len_intercept_shape):
+        shape_values.append(readint(f, 2))
+    intercept_shape = tuple(shape_values)
+    intercept = np.frombuffer(b_intercept).reshape(intercept_shape)
+
+    if pred_name == 'LogisticRegression':
+        len_b_classes = readint(f, 2)
+        b_classes = f.read(len_b_classes)
+        classes = np.frombuffer(b_classes, dtype=np.uint8)
+
+    clf = predictors[pred_name]()
+    clf.coef_ = coef
+    clf.intercept_ = intercept
+    if pred_name == 'LogisticRegression':
+        clf.classes_ = classes
+
+    return clf

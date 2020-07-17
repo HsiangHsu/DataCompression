@@ -125,10 +125,10 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
         num_prev_imgs: int
             how many images preceeding each element should be considered as
             "dataset context"
-        prev_context_indices: string
+        prev_context: string
             string describing the relative location of a pixel to be used
             for context in each "dataset context" image
-        current_context_indices: string
+        cur_context: string
             string describing the relative location of a pixel to be used
             for context in the current image
         should_extract_training_pairs: boolean (default True)
