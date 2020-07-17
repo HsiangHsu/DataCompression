@@ -165,8 +165,8 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs, prev_conte
     true_pixels = None
     if not should_extract_training_pairs:
         assert training_filenames is not None, "Must pass filenames for training features and labels if not extracting again"
-        training_context = np.load(training_filenames[0], allow_pickle=True, mmap_mode='r') 
-        true_pixels = np.load(training_filenames[1], allow_pickle=True, mmap_mode='r') 
+        training_context = np.load(training_filenames[0], allow_pickle=True, mmap_mode='r')
+        true_pixels = np.load(training_filenames[1], allow_pickle=True, mmap_mode='r')
     else:
         start = timer()
         training_context, true_pixels = extract_training_pairs(ordered_dataset,
@@ -183,7 +183,7 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs, prev_conte
         clf = linear_model.LinearRegression()
     elif predictor_family == 'logistic':
         training_context = csr_matrix(training_context)
-        clf = linear_model.SGDClassifier(loss='log')
+        clf = linear_model.SGDClassifier(loss='log', n_jobs=-1)
     clf.fit(training_context, true_pixels)
     end_model_fitting = timer()
     print(f'\tTrained a {predictor_family} model in ' + \

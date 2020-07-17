@@ -306,7 +306,6 @@ def get_freqs(values):
 
 def encode_predictor(metastream, clf):
     pred_name = str(clf).split('(')[0]
-
     metastream += len(pred_name).to_bytes(1, 'little')
     metastream += pred_name.encode()
 
@@ -324,7 +323,7 @@ def encode_predictor(metastream, clf):
     for i in range(len(clf.intercept_.shape)):
         metastream += clf.intercept_.shape[i].to_bytes(2, 'little')
 
-    if pred_name == 'LogisticRegression':
+    if pred_name == 'SGDClassifier':
         b_classes = clf.classes_.tobytes()
         metastream += len(b_classes).to_bytes(2, 'little')
         metastream += b_classes
@@ -333,7 +332,7 @@ def encode_predictor(metastream, clf):
 
 def decode_predictor(f):
     predictors = {'LinearRegression':linear_model.LinearRegression,
-        'LogisticRegression':linear_model.LogisticRegression}
+        'SGDClassifier':linear_model.SGDClassifier}
 
     len_pred_name = readint(f, 1)
     pred_name = f.read(len_pred_name).decode()
@@ -356,7 +355,7 @@ def decode_predictor(f):
     intercept_shape = tuple(shape_values)
     intercept = np.frombuffer(b_intercept).reshape(intercept_shape)
 
-    if pred_name == 'LogisticRegression':
+    if pred_name == 'SGDClassifier':
         len_b_classes = readint(f, 2)
         b_classes = f.read(len_b_classes)
         classes = np.frombuffer(b_classes, dtype=np.uint8)
@@ -364,7 +363,7 @@ def decode_predictor(f):
     clf = predictors[pred_name]()
     clf.coef_ = coef
     clf.intercept_ = intercept
-    if pred_name == 'LogisticRegression':
+    if pred_name == 'SGDClassifier':
         clf.classes_ = classes
 
     return clf
