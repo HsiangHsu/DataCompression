@@ -89,9 +89,17 @@ def extract_training_pairs(ordered_dataset, num_prev_imgs, prev_context_indices,
 
 def __compute_classifier_accuracy(clf, predictor_family, training_context, true_pixels):
     if predictor_family == 'logistic' or predictor_family == 'linear':
-        n_samples_float = 1.0 * len(true_pixels)
-        predicted_pixels = convert_predictions_to_pixels(clf.predict(training_context), training_context.dtype)
-        return 1 - np.count_nonzero(predicted_pixels - true_pixels) / n_samples_float
+        remaining_samples_to_predict = len(true_pixels)
+        wrong_pixels_count = 0
+        start_index = 0
+        while remaining_samples_to_predict > 0:
+            predict_batch_size = min(remaining_samples_to_predict, 1000)
+            dtype = training_context.dtype
+            estimated_pixels = convert_predictions_to_pixels(clf.predict(training_context[start_index:start_index + predict_batch_size]), dtype)
+            wrong_pixels_count += np.count_nonzero(estimated_pixels - true_pixels[start_index:start_index + predict_batch_size])
+            start_index += predict_batch_size
+            remaining_samples_to_predict -= predict_batch_size
+        return 1 - wrong_pixels_count / len(true_pixels)
     assert False, 'Must be a logistic or linear predictor to compute accuracy'
 
 
@@ -157,6 +165,7 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs, prev_conte
     start = timer()
     clf = None
     if predictor_family == 'linear':
+        training_context = np.array(training_context)
         clf = linear_model.LinearRegression()
     elif predictor_family == 'logistic':
         training_context = csr_matrix(training_context)
