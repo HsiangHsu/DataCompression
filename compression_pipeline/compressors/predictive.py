@@ -5,7 +5,7 @@ This module contains helper functions for implementing the predictive coding
 compressor.
 '''
 import numpy as np
-from utilities import convert_predictions_to_pixels
+from utilities import name_to_context_pixels, convert_predictions_to_pixels, get_valid_pixels_for_predictions
 
 def predictive_comp(data, element_axis, predictor, training_context,
     true_pixels, n_prev, pcs, ccs):
@@ -20,8 +20,13 @@ def predictive_comp(data, element_axis, predictor, training_context,
     # Build residuals
     residuals = np.array([], dtype=dtype)
     residuals = np.append(residuals, data[:n_prev].flatten())
-    r_start, r_end, c_start, c_end = get_pred_range(data.shape, ccs, pcs)
-    for img in data[2:]:
+    current_context_indices = name_to_context_pixels(ccs)
+    prev_context_indices = name_to_context_pixels(pcs)
+    r_start, r_end, c_start, c_end = get_valid_pixels_for_predictions(data[0].shape, 
+                                        current_context_indices, prev_context_indices)
+    r_end += 1
+    c_end += 1
+    for img in data[n_prev:]:
         residuals = np.append(residuals, img[:r_start,:])
         residuals = np.append(residuals, img[r_start:,:c_start])
         residuals = np.append(residuals, img[r_end:,c_start:])
@@ -35,10 +40,14 @@ def predictive_decomp(error_string, residuals, predictor, n_prev, pcs, ccs,
     original_shape):
 
     dtype = error_string.dtype
-    minval, maxval = np.iinfo(dtype).min, np.iinfo(dtype).max
 
     data = np.empty(original_shape, dtype=dtype)
-    r_start, r_end, c_start, c_end = get_pred_range(original_shape, ccs, pcs)
+    current_context_indices = name_to_context_pixels(ccs)
+    prev_context_indices = name_to_context_pixels(pcs)
+    r_start, r_end, c_start, c_end = get_valid_pixels_for_predictions(original_shape[1:], 
+                                        current_context_indices, prev_context_indices)
+    r_end += 1
+    c_end += 1
     errors = error_string.reshape((original_shape[0]-n_prev, r_end-r_start,
         c_end-c_start))
 
@@ -63,43 +72,6 @@ def predictive_decomp(error_string, residuals, predictor, n_prev, pcs, ccs,
         f'Not all residuals were consumed: {len(residuals)} pixels leftover.'
 
     return data
-
-
-def get_pred_range(original_shape, ccs, pcs):
-    r_start = 0
-    r_end = original_shape[1]
-    c_start = 0
-    c_end = original_shape[2]
-
-    if ccs == 'DAB':
-        r_start = max(r_start, 1)
-        r_end = min(r_end, original_shape[1])
-        c_start = max(c_start, 1)
-        c_end = min(c_end, original_shape[2])
-    elif ccs == 'DABC':
-        r_start = max(r_start, 1)
-        r_end = min(r_end, original_shape[1])
-        c_start = max(c_start, 1)
-        c_end = min(c_end, original_shape[2]-1)
-    else:
-        print(f'Current context string {ccs} unsupported by decompressor.')
-        exit()
-
-    if pcs == 'DAB':
-        r_start = max(r_start, 1)
-        r_end = min(r_end, original_shape[1])
-        c_start = max(c_start, 1)
-        c_end = min(c_end, original_shape[2])
-    elif pcs == 'DABC':
-        r_start = max(r_start, 1)
-        r_end = min(r_end, original_shape[1])
-        c_start = max(c_start, 1)
-        c_end = min(c_end, original_shape[2]-1)
-    else:
-        print(f'Previous context string {pcs} unsupported by decompressor.')
-        exit()
-
-    return r_start, r_end, c_start, c_end
 
 
 def load_residuals(data, residuals, original_shape, n, r_start, r_end, c_start,

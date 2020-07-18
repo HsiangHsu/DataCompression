@@ -12,13 +12,7 @@ from timeit import default_timer as timer
 
 import pickle
 
-def name_to_context_pixels(name):
-    if name == 'DAB':
-        return [(0, -1), (-1, -1), (-1, 0)]
-    if name == 'DABC':
-        return [(0, -1), (-1, -1), (-1, 0), (-1, 1)]
-    return None
-from utilities import convert_predictions_to_pixels
+from utilities import name_to_context_pixels, convert_predictions_to_pixels, get_valid_pixels_for_predictions
 
 def line_order_raster_image_to_1d(img):
         """
@@ -73,34 +67,13 @@ def apply_relative_indices(relative_indices, i, j):
         return ([x + i for (x, y) in relative_indices], [y + j for (x, y) in relative_indices])
 
 
-def get_valid_pixels(img_shape, relative_indices):
-    '''
-    TODO: if raster scans are more general.
-
-    Because we do not currently support scan patterns or initial context that is
-    "ahead of"  (either to the right or below) a current pixel, we require
-    relative context indices to be negative-valued in the row or zero in the current row
-    but negative in the column.
-    '''
-    err_msg = "Impossible to satisfy passing initial context with these relative indices %r"
-    assert np.all([index[0] < 0 or (index[0] == 0 and index[1] < 0) for index in relative_indices]), err_msg % relative_indices
-    valid_pixels = []
-    min_x = abs(min([index[0] for index in relative_indices]))
-    max_x = img_shape[1] - max(0, max([index[0] for index in relative_indices])) - 1
-    min_y = abs(min([index[1] for index in relative_indices]))
-    max_y = img_shape[0] - max(0, max([index[1] for index in relative_indices])) - 1
-    for x in range(min_x, max_x + 1):
-        for y in range(min_y, max_y + 1):
-            valid_pixels += [(x, y)]
-    return valid_pixels
-
 def extract_training_pairs(ordered_dataset, num_prev_imgs, prev_context_indices, current_context_indices):
     '''
     Assumes |prev_context_indices| and |current_context_indices| are lists of relative indices on (i, j)
     '''
-    valid_in_cur = get_valid_pixels(ordered_dataset[0].shape, current_context_indices)
-    valid_in_prev = get_valid_pixels(ordered_dataset[0].shape, prev_context_indices)
-    pixels_to_predict = [p for p in valid_in_prev if p in valid_in_cur]
+    pixels_to_predict = get_valid_pixels_for_predictions(ordered_dataset[0].shape,
+                                                         current_context_indices, prev_context_indices, 
+                                                         return_tuples=True)
     X_train = []
     Y_train = []
     for current_img_index in range(num_prev_imgs, ordered_dataset.shape[0]):
