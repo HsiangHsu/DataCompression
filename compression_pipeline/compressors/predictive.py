@@ -4,16 +4,8 @@ predictive.py
 This module contains helper functions for implementing the predictive coding
 compressor.
 '''
-
 import numpy as np
-from sklearn import linear_model
-
-from datetime import timedelta
-from timeit import default_timer as timer
-
-import pickle
-
-from matplotlib import pyplot as plt
+from utilities import convert_predictions_to_pixels
 
 def predictive_comp(data, element_axis, predictor, training_context,
     true_pixels, n_prev, pcs, ccs):
@@ -22,9 +14,7 @@ def predictive_comp(data, element_axis, predictor, training_context,
 
     # Build error string
     dtype = data.dtype
-    estimated_pixels = predictor.predict(training_context)
-    minval, maxval = np.iinfo(dtype).min, np.iinfo(dtype).max
-    estimated_pixels = np.clip(estimated_pixels, minval, maxval).astype(dtype)
+    estimated_pixels = convert_predictions_to_pixels(predictor.predict(training_context), dtype)
     error_string = true_pixels - estimated_pixels
 
     # Build residuals
@@ -65,8 +55,7 @@ def predictive_decomp(error_string, residuals, predictor, n_prev, pcs, ccs,
         for r in range(r_start, r_end):
             for c in range(c_start, c_end):
                 context = get_context(data, n_prev, pcs, ccs, n, r, c)
-                prediction = predictor.predict(context)
-                prediction = np.clip(prediction, minval, maxval).astype(dtype)
+                prediction = convert_predictions_to_pixels(predictor.predict(context), dtype)
                 data[n,r,c] = prediction + errors[n-n_prev, r-r_start,
                     c-c_start]
 

@@ -8,6 +8,15 @@ from math import ceil, log2
 import numpy as np
 
 
+def convert_predictions_to_pixels(predictions, dtype):
+    '''
+    Casts the output of a model's |predictions| into pixel values that fit
+    in |dtype|.
+    '''
+    minval, maxval = np.iinfo(dtype).min, np.iinfo(dtype).max
+    return np.clip(predictions, minval, maxval).astype(dtype)
+
+
 def find_dtype(n):
     '''
     Finds the smallest numpy datatype given a maximum value that must be

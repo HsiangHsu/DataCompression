@@ -18,6 +18,7 @@ def name_to_context_pixels(name):
     if name == 'DABC':
         return [(0, -1), (-1, -1), (-1, 0), (-1, 1)]
     return None
+from utilities import convert_predictions_to_pixels
 
 def line_order_raster_image_to_1d(img):
         """
@@ -112,11 +113,14 @@ def extract_training_pairs(ordered_dataset, num_prev_imgs, prev_context_indices,
             Y_train.append(ordered_dataset[current_img_index][i][j])
     return (X_train, Y_train)
 
+
 def __compute_classifier_accuracy(clf, predictor_family, training_context, true_pixels):
     if predictor_family == 'logistic' or predictor_family == 'linear':
         n_samples_float = 1.0 * len(true_pixels)
-        return 1 - np.count_nonzero(np.round(clf.predict(training_context)) - true_pixels) / n_samples_float
+        predicted_pixels = convert_predictions_to_pixels(clf.predict(training_context), training_context.dtype)
+        return 1 - np.count_nonzero(predicted_pixels - true_pixels) / n_samples_float
     assert False, 'Must be a logistic or linear predictor to compute accuracy'
+
 
 def train_predictor(predictor_family, ordered_dataset, num_prev_imgs, prev_context, cur_context,
                     should_extract_training_pairs=True, training_filenames=None):
