@@ -7,6 +7,7 @@ This module contains the Huffman encoder for use with predictive coding.
 from bitstring import BitArray
 from copy import deepcopy
 from heapq import heappush, heappop, heapify
+from humanize import naturalsize
 from math import ceil, log2
 import numpy as np
 import pickle
@@ -40,6 +41,7 @@ def pred_huffman_enc(compression, pre_metadata, comp_metadata, original_shape,
     '''
 
     error_string, residuals, clf = compression
+    n_clf = len(clf)
     n_errors = error_string.shape[0]
     n_residuals = residuals.shape[0]
     n_prev = pre_metadata[0]
@@ -51,12 +53,11 @@ def pred_huffman_enc(compression, pre_metadata, comp_metadata, original_shape,
 
     # Metadata needed to reconstruct arrays: shape and dtype.
     # 4 bytes are used to be fit a reasonably wide range of values
+    metastream += n_clf.to_bytes(1, 'little')
     metastream += n_errors.to_bytes(4, 'little')
     metastream += n_residuals.to_bytes(4, 'little')
     metastream += ord(error_string.dtype.char).to_bytes(1, 'little')
-    metastream += len(original_shape).to_bytes(1, 'little')
-    for i in range(len(original_shape)):
-        metastream += original_shape[i].to_bytes(4, 'little')
+    metastream += write_shape(original_shape)
     metastream = encode_predictor(metastream, clf)
     metastream += n_prev.to_bytes(1, 'little')
     metastream += len(pcs).to_bytes(1, 'little')
@@ -66,13 +67,13 @@ def pred_huffman_enc(compression, pre_metadata, comp_metadata, original_shape,
 
     f = open('comp.out', 'wb')
     metalen = len(metastream)
-    print(f'\tMetastream: {metalen} bytes.')
+    print(f'\tMetastream: {naturalsize(metalen)}.')
     f.write(metastream)
 
-    # RGB data
-    if len(original_shape) == 4 and original_shape[-1] == 3:
-        error_string = rgb_to_int(error_string)
-        residuals = rgb_to_int(residuals)
+    error_shape = error_string.shape
+    error_string = error_string.flatten()
+    residual_shape = residuals.shape
+    residuals = residuals.flatten()
 
     # Generate Huffman code for error string
     freqs = get_freqs(error_string)
@@ -100,18 +101,22 @@ def pred_huffman_enc(compression, pre_metadata, comp_metadata, original_shape,
         residual_codestream += len(symbol[1]).to_bytes(residual_code_len,
             'little')
 
-    codelen = len(residual_codestream)+len(error_codestream)+11
-    print(f'\tCodestream: {codelen} bytes, {n_error_symbols} / ' + \
-        f'{n_residual_symbols} symbols.')
-    f.write(len(error_codestream).to_bytes(4, 'little'))
-    f.write(len(residual_codestream).to_bytes(4, 'little'))
-    f.write(symbol_len.to_bytes(1, 'little'))
-    f.write(error_code_len.to_bytes(1, 'little'))
-    f.write(residual_code_len.to_bytes(1, 'little'))
-    f.write(error_codestream)
-    f.write(residual_codestream)
+    codestream = b''
+    codestream += write_shape(error_shape)
+    codestream += write_shape(residual_shape)
+    codestream += symbol_len.to_bytes(1, 'little')
+    codestream += error_code_len.to_bytes(1, 'little')
+    codestream += residual_code_len.to_bytes(1, 'little')
+    codestream += len(error_codestream).to_bytes(4, 'little')
+    codestream += error_codestream
+    codestream += len(residual_codestream).to_bytes(4, 'little')
+    codestream += residual_codestream
+    f.write(codestream)
+    codelen = len(codestream)
+    print(f'\tCodestream: {naturalsize(codelen)}, ' + \
+        f'{n_error_symbols} / {n_residual_symbols} symbols.')
 
-    # Generate Huffman coded bitstream for data on this layer
+    # Generate Huffman coded bitstream
     error_bitstream = ''
     for error in error_string:
         error_bitstream += error_code[error]
@@ -130,17 +135,17 @@ def pred_huffman_enc(compression, pre_metadata, comp_metadata, original_shape,
     residual_bytestream = [int(residual_bitstream[8*j:8*(j+1)], 2)
         for j in range(len(residual_bitstream)//8)]
 
-    # The first element is not Huffman coded because it is not a delta
-    bytestreamlen = len(error_bytestream+residual_bytestream)+5
-    print(f'\tBytestream: {bytestreamlen} bytes.')
-    f.write(len(error_bytestream).to_bytes(4, 'little'))
-    f.write(error_padding.to_bytes(1, 'little'))
-    f.write(bytes(error_bytestream))
-    f.write(len(residual_bytestream).to_bytes(4, 'little'))
-    f.write(residual_padding.to_bytes(1, 'little'))
-    f.write(bytes(residual_bytestream))
+    bytestream = b''
+    bytestream += error_padding.to_bytes(1, 'little')
+    bytestream += residual_padding.to_bytes(1, 'little')
+    bytestream += len(error_bytestream).to_bytes(4, 'little')
+    bytestream += bytes(error_bytestream)
+    bytestream += len(residual_bytestream).to_bytes(4, 'little')
+    bytestream += bytes(residual_bytestream)
+    bytelen = len(bytestream)
+    print(f'\tBytestream: {naturalsize(bytelen)}.')
 
-    print(f'\tTotal len: {metalen+codelen+bytestreamlen}.\n')
+    print(f'\tTotal len: {naturalsize(metalen+codelen+bytelen)}.\n')
 
     f.close()
 
@@ -172,15 +177,12 @@ def pred_huffman_dec(comp_file):
     f = open(comp_file, 'rb')
 
     # Read in sizing and and datatype metadata to reconstruct arrays.
+    n_clf = readint(f, 1)
     n_errors = readint(f, 4)
     n_residuals = readint(f, 4)
     dtype = np.dtype(chr(readint(f, 1)))
     dsize = dtype.itemsize
-    original_shape_len = readint(f, 1)
-    shape_values = []
-    for i in range(original_shape_len):
-        shape_values.append(readint(f, 4))
-    original_shape = tuple(shape_values)
+    original_shape = read_shape(f)
     clf = decode_predictor(f)
     n_prev = readint(f, 1)
     len_pcs = readint(f, 1)
@@ -317,65 +319,71 @@ def get_freqs(values):
     return freqs
 
 def encode_predictor(metastream, clf):
-    pred_name = str(clf).split('(')[0]
+    pred_name = str(clf[0]).split('(')[0]
     metastream += len(pred_name).to_bytes(1, 'little')
     metastream += pred_name.encode()
 
-    b_coef = clf.coef_.tobytes()
-    metastream += len(b_coef).to_bytes(2, 'little')
-    metastream += b_coef
-    metastream += len(clf.coef_.shape).to_bytes(1, 'little')
-    for i in range(len(clf.coef_.shape)):
-        metastream += clf.coef_.shape[i].to_bytes(2, 'little')
+    for pred in clf:
+        b_coef = pred.coef_.tobytes()
+        metastream += len(b_coef).to_bytes(2, 'little')
+        metastream += b_coef
+        metastream += write_shape(pred.coef_.shape)
 
-    b_intercept = clf.intercept_.tobytes()
-    metastream += len(b_intercept).to_bytes(2, 'little')
-    metastream += b_intercept
-    metastream += len(clf.intercept_.shape).to_bytes(1, 'little')
-    for i in range(len(clf.intercept_.shape)):
-        metastream += clf.intercept_.shape[i].to_bytes(2, 'little')
+        b_intercept = pred.intercept_.tobytes()
+        metastream += len(b_intercept).to_bytes(2, 'little')
+        metastream += b_intercept
+        metastream += write_shape(pred.intercept_.shape)
 
-    if pred_name == 'SGDClassifier':
-        b_classes = clf.classes_.tobytes()
-        metastream += len(b_classes).to_bytes(2, 'little')
-        metastream += b_classes
+        if pred_name == 'SGDClassifier':
+            b_classes = pred.classes_.tobytes()
+            metastream += len(b_classes).to_bytes(2, 'little')
+            metastream += b_classes
 
     return metastream
 
-def decode_predictor(f):
+def decode_predictor(f, n_pred):
     predictors = {'LinearRegression':linear_model.LinearRegression,
         'SGDClassifier':linear_model.SGDClassifier}
 
     len_pred_name = readint(f, 1)
     pred_name = f.read(len_pred_name).decode()
 
-    len_b_coef = readint(f, 2)
-    b_coef = f.read(len_b_coef)
-    len_coef_shape = readint(f, 1)
-    shape_values = []
-    for i in range(len_coef_shape):
-        shape_values.append(readint(f, 2))
-    coef_shape = tuple(shape_values)
-    coef = np.frombuffer(b_coef).reshape(coef_shape)
+    clf = [predictors[pred_name]() for i in range(n_pred)]
+    for pred in clf:
+        len_b_coef = readint(f, 2)
+        b_coef = f.read(len_b_coef)
+        coef_shape = read_shape(f)
+        coef = np.frombuffer(b_coef).reshape(coef_shape)
 
-    len_b_intercept = readint(f, 2)
-    b_intercept = f.read(len_b_intercept)
-    len_intercept_shape = readint(f, 1)
-    shape_values = []
-    for i in range(len_intercept_shape):
-        shape_values.append(readint(f, 2))
-    intercept_shape = tuple(shape_values)
-    intercept = np.frombuffer(b_intercept).reshape(intercept_shape)
+        len_b_intercept = readint(f, 2)
+        b_intercept = f.read(len_b_intercept)
+        intercept_shape = read_shape(f)
+        intercept = np.frombuffer(b_intercept).reshape(intercept_shape)
 
-    if pred_name == 'SGDClassifier':
-        len_b_classes = readint(f, 2)
-        b_classes = f.read(len_b_classes)
-        classes = np.frombuffer(b_classes, dtype=np.uint8)
+        if pred_name == 'SGDClassifier':
+            len_b_classes = readint(f, 2)
+            b_classes = f.read(len_b_classes)
+            classes = np.frombuffer(b_classes, dtype=np.uint8)
 
-    clf = predictors[pred_name]()
-    clf.coef_ = coef
-    clf.intercept_ = intercept
-    if pred_name == 'SGDClassifier':
-        clf.classes_ = classes
+        pred = predictors[pred_name]()
+        pred.coef_ = coef
+        pred.intercept_ = intercept
+        if pred_name == 'SGDClassifier':
+            pred.classes_ = classes
 
     return clf
+
+def write_shape(shape):
+    stream = b''
+    stream += len(shape).to_bytes(1, 'little')
+    for i in range(len(shape)):
+        stream += shape[i].to_bytes(4, 'little')
+    return stream
+
+def read_shape(f):
+    ndim = readint(f, 1)
+    shape_values = []
+    for i in range(ndim):
+        shape_values.append(readint(f, 4))
+    return tuple(shape_values)
+

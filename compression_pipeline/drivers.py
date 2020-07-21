@@ -73,10 +73,12 @@ def preprocess(data, args):
         if args.feature_file is not None:
             return train_predictor(args.predictor_family, ordered_data,
                 args.num_prev_imgs, args.prev_context, args.curr_context,
+                args.rgb_mode,
                 should_extract_training_pairs=False,
                 training_filenames=(args.feature_file, args.label_file))
         return train_predictor(args.predictor_family, ordered_data,
-            args.num_prev_imgs, args.prev_context, args.curr_context)
+            args.num_prev_imgs, args.prev_context, args.curr_context,
+            args.mode)
 
 
 def compress(data, element_axis, pre_metadata, args):
@@ -107,7 +109,7 @@ def compress(data, element_axis, pre_metadata, args):
     if compressor == 'knn-mst':
         return knn_mst_comp(data, element_axis, args.metric, args.minkowski_p)
     elif compressor == 'predictive':
-        return predictive_comp(data, element_axis, *pre_metadata)
+        return predictive_comp(data, element_axis, *pre_metadata, args.mode)
 
 
 def encode(compression, pre_metadata, comp_metadata, original_shape, args):

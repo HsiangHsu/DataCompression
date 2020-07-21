@@ -61,6 +61,8 @@ pre_group.add_argument('--current-context', type=str, default='DAB',
     help='context pixels for predictive coding current image')
 pre_group.add_argument('--num-prev-imgs', type=int, default=2,
     dest='num_prev_imgs')
+pre_group.add_argument('--mode', type=str, choices=['triple', 'single'],
+    default='single')
 pre_group.add_argument('--feature-file', type=str, dest='feature_file',
     required=False)
 pre_group.add_argument('--label-file', type=str, dest='label_file',

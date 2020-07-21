@@ -5,36 +5,49 @@ This module contains helper functions for implementing the predictive coding
 compressor.
 '''
 import numpy as np
-from utilities import name_to_context_pixels, convert_predictions_to_pixels, \
+from utilities import name_to_context_pixels, predictions_to_pixels, \
     get_valid_pixels_for_predictions
 
-def predictive_comp(data, element_axis, predictor, training_context,
-    true_pixels, n_prev, pcs, ccs):
+def predictive_comp(data, element_axis, predictors, training_context,
+    true_pixels, n_prev, pcs, ccs, mode):
     assert training_context is not None
     assert true_pixels is not None
 
+    n_pred = true_pixels.shape[0]
     dtype = data.dtype
-    if true_pixels.ndim == 2:
+
+    if true_pixels.ndim == 3:
+        # RGB triples
+        assert mode == 'single'
         to_reshape = (-1, true_pixels.shape[-1])
         residuals = np.empty((0, true_pixels.shape[-1]), dtype=dtype)
-        error_string = np.empty((0, true_pixels.shape[-1]), dtype=dtype)
+        error_string = np.empty((1, *true_pixels.shape[1:]), dtype=dtype)
+    elif true_pixels.ndim == 2:
+        if mode == 'single':
+            # Grayscale singles
+            to_reshape = (-1,)
+            residuals = np.empty((0,), dtype=dtype)
+            error_string = np.empty((1, true_pixels.shape[1],), dtype=dtype)
+        elif mode == 'triple':
+            # RGB singles
+            to_reshape = (-1, true_pixels.shape[0])
+            residuals = np.empty((0, true_pixels.shape[0]), dtype=dtype)
+            error_string = np.empty(true_pixels.shape, dtype=dtype)
     else:
-        to_reshape = (-1,)
-        residuals = np.empty((0,), dtype=dtype)
-        error_string = np.empty((0,), dtype=dtype)
+        print('Bad shape for true_pixels.')
+        exit(-1)
 
     # Build error string
-    remaining_samples_to_predict = len(true_pixels)
+    remaining_samples_to_predict = true_pixels.shape[1]
     start_index = 0
     while remaining_samples_to_predict > 0:
         predict_batch_size = min(remaining_samples_to_predict, 1000)
-        predictions = predictor.predict(
-            training_context[start_index:start_index+predict_batch_size])
-        estimated_pixels = convert_predictions_to_pixels(predictions,
-            dtype)
-        error_string = np.append(error_string,
-            true_pixels[start_index:start_index + predict_batch_size] - \
-            estimated_pixels, axis=0)
+        s = start_index
+        e = start_index + predict_batch_size
+        for i in range(n_pred):
+            predictions = predictors[i].predict(training_context[s:e])
+            estimated_pixels = predictions_to_pixels(predictions, dtype)
+            error_string[i][s:e] = true_pixels[i][s:e] - estimated_pixels
         start_index += predict_batch_size
         remaining_samples_to_predict -= predict_batch_size
 
@@ -58,14 +71,18 @@ def predictive_comp(data, element_axis, predictor, training_context,
         residuals = np.append(residuals,
             img[r_start:r_end,c_end:].reshape(to_reshape), axis=0)
 
-    if true_pixels.ndim == 2:
-        assert residuals.shape[0] + error_string.shape[0] == \
+    if true_pixels.ndim == 3:
+        assert residuals.shape[0] + error_string.shape[1] == \
             np.prod(data.shape[:-1])
-    else:
-        assert residuals.shape[0] + error_string.shape[0] == \
-            np.prod(data.shape)
+    elif true_pixels.ndim == 2:
+        if mode == 'single':
+            assert residuals.shape[0] + error_string.shape[1] == \
+                np.prod(data.shape)
+        elif mode == 'triple':
+            assert residuals.shape[0] + error_string.shape[1] == \
+                np.prod(data.shape[:-1])
 
-    return (error_string, residuals, predictor), None, data.shape
+    return (error_string, residuals, predictors), None, data.shape
 
 
 def predictive_decomp(error_string, residuals, predictor, n_prev, pcs, ccs,
@@ -102,7 +119,7 @@ def predictive_decomp(error_string, residuals, predictor, n_prev, pcs, ccs,
             for c in range(c_start, c_end):
                 context = get_context(data, n_prev, pcs, ccs, n, r, c)
                 prediction = predictor.predict(context)
-                prediction = convert_predictions_to_pixels(prediction, dtype)
+                prediction = predictions_to_pixels(prediction, dtype)
                 data[n,r,c] = prediction + errors[n-n_prev, r-r_start,
                     c-c_start]
 
@@ -172,7 +189,7 @@ def get_context(data, n_prev, pcs, ccs, n, r, c):
         context[0, 3] = data[n,r-1,c+1].flatten()
     else:
         print(f'Current context string {ccs} unsupported by decompressor.')
-        exit()
+        exit(-1)
 
     if pcs == 'DAB':
         for p in range(n_prev):
@@ -187,6 +204,6 @@ def get_context(data, n_prev, pcs, ccs, n, r, c):
             context[0, len(ccs)+4*p+3] = data[n-(p+1),r-1,c+1].flatten()
     else:
         print(f'Previous context string {pcs} unsupported by decompressor.')
-        exit()
+        exit(-1)
 
     return context.reshape((1, -1))

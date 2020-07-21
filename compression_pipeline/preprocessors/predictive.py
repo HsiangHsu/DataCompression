@@ -12,7 +12,8 @@ from timeit import default_timer as timer
 
 import pickle
 
-from utilities import name_to_context_pixels, convert_predictions_to_pixels, get_valid_pixels_for_predictions
+from utilities import name_to_context_pixels, predictions_to_pixels, \
+    get_valid_pixels_for_predictions
 
 def line_order_raster_image_to_1d(img):
         """
@@ -95,7 +96,7 @@ def __compute_classifier_accuracy(clf, predictor_family, training_context, true_
         while remaining_samples_to_predict > 0:
             predict_batch_size = min(remaining_samples_to_predict, 1000)
             dtype = training_context.dtype
-            estimated_pixels = convert_predictions_to_pixels(clf.predict(training_context[start_index:start_index + predict_batch_size]), dtype)
+            estimated_pixels = predictions_to_pixels(clf.predict(training_context[start_index:start_index + predict_batch_size]), dtype)
             wrong_pixels_count += np.count_nonzero(estimated_pixels - true_pixels[start_index:start_index + predict_batch_size])
             start_index += predict_batch_size
             remaining_samples_to_predict -= predict_batch_size
@@ -103,14 +104,16 @@ def __compute_classifier_accuracy(clf, predictor_family, training_context, true_
     assert False, 'Must be a logistic or linear predictor to compute accuracy'
 
 
-def train_predictor(predictor_family, ordered_dataset, num_prev_imgs, prev_context, cur_context,
-                    should_extract_training_pairs=True, training_filenames=None):
+def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
+    prev_context, cur_context, mode,
+    should_extract_training_pairs=True, training_filenames=None):
     '''
     Generalized predictive coding preprocessor
 
     Args:
         predictor_family: str
-            one of 'linear', 'logistic' for the regression family to compute across training features and labels
+            one of 'linear', 'logistic' for the regression family to compute
+            across training features and labels
         ordered_dataset: numpy array
             data to be preprocessed, of shape (n_elements, n_points)
         num_prev_imgs: int
@@ -122,6 +125,8 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs, prev_conte
         cur_context: string
             string describing the relative location of a pixel to be used
             for context in the current image
+        mode: string
+            strategy for setting up predictors, in particular for RGB images
         should_extract_training_pairs: boolean (default True)
             whether to compute the training context from the dataset or else
             load from |training_pairs_filename|
@@ -142,40 +147,64 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs, prev_conte
             len(|prev_context|) + len(|cur_context|)
             third is a vector of length at MOST len(|ordered_dataset[0].ravel|)
     '''
+
     prev_context_indices = name_to_context_pixels(prev_context)
     current_context_indices = name_to_context_pixels(cur_context)
-    assert predictor_family in ['linear', 'logistic'], "Only linear and logistic predictors are currently supported"
+    assert predictor_family in ['linear', 'logistic'], \
+        "Only linear and logistic predictors are currently supported"
+    if mode == 'triple':
+        assert ordered_dataset.ndim == 4 and ordered_dataset.shape[-1] == 3, \
+            'Invalid data shape for triple mode.'
+        n_pred = 3
+    elif mode == 'single':
+        n_pred = 1
 
-    training_context = None
-    true_pixels = None
     if not should_extract_training_pairs:
-        assert training_filenames is not None, "Must pass filenames for training features and labels if not extracting again"
-        training_context = np.load(training_filenames[0], allow_pickle=True, mmap_mode='r')
-        true_pixels = np.load(training_filenames[1], allow_pickle=True, mmap_mode='r')
+        assert training_filenames is not None, \
+            "Must pass filenames for training features and labels if not " + \
+            "extracting again"
+        training_context = np.load(training_filenames[0], allow_pickle=True,
+            mmap_mode='r')
+        true_pixels = np.load(training_filenames[1], allow_pickle=True,
+            mmap_mode='r')
+        # TODO: Validate loaded training context and true pixels to ensure they
+        #       match shape, etc. of parameters and data passed in
     else:
         start = timer()
         training_context, true_pixels = extract_training_pairs(ordered_dataset,
             num_prev_imgs, prev_context_indices, current_context_indices)
-        training_context, true_pixels = np.array(training_context), np.array(true_pixels)
-        training_context = training_context.reshape(training_context.shape[0], -1)
+        training_context, true_pixels = np.array(training_context), \
+            np.array(true_pixels)
+        training_context = \
+            training_context.reshape(training_context.shape[0], -1)
+        if mode == 'triple':
+            true_pixels = true_pixels.transpose((1,0))
+        elif mode == 'single':
+            true_pixels = true_pixels.reshape((1, *true_pixels.shape))
         end_extraction = timer()
         print(f'\tExtracted training pairs in ' + \
             f'{timedelta(seconds=end_extraction-start)}.')
+
         date_str = f'{datetime.now().hour}_{datetime.now().minute}'
         np.save(f'training_context_{date_str}', np.array(training_context))
         np.save(f'true_pixels_{date_str}', np.array(true_pixels))
+
     start = timer()
-    clf = None
     if predictor_family == 'linear':
-        training_context = np.array(training_context)
-        clf = linear_model.LinearRegression()
+        clf = [linear_model.LinearRegression(n_jobs=-1) for i in range(n_pred)]
     elif predictor_family == 'logistic':
-        # training_context = csr_matrix(training_context)
-        clf = linear_model.SGDClassifier(loss='log', n_jobs=-1)
-    clf.fit(training_context, true_pixels)
+        training_context = csr_matrix(training_context)
+        clf = [linear_model.SGDClassifier(loss='log', n_jobs=-1) \
+            for i in range(n_pred)]
+    for i in range(n_pred):
+        clf[i].fit(training_context, true_pixels[i])
     end_model_fitting = timer()
     print(f'\tTrained a {predictor_family} model in ' + \
-        f'{timedelta(seconds=end_model_fitting-start)}.\n')
-    # print('\t\t(Accuracy: %05f)\n' %  __compute_classifier_accuracy(clf, predictor_family, training_context, true_pixels))
+        f'{timedelta(seconds=end_model_fitting-start)}.')
+    for i in range(n_pred):
+        print('\t\t(Accuracy: %05f)' %  __compute_classifier_accuracy(clf[i],
+            predictor_family, training_context, true_pixels[i]))
+    print()
+
     return ordered_dataset, 0, (clf, training_context, true_pixels,
         num_prev_imgs, prev_context, cur_context)

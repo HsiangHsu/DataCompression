@@ -83,7 +83,7 @@ def name_to_context_pixels(name):
     return None
 
 
-def convert_predictions_to_pixels(predictions, dtype):
+def predictions_to_pixels(predictions, dtype):
     '''
     Casts the output of a model's |predictions| into pixel values that fit
     in |dtype|.
