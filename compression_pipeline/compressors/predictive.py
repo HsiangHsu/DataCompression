@@ -13,18 +13,30 @@ def predictive_comp(data, element_axis, predictor, training_context,
     assert training_context is not None
     assert true_pixels is not None
 
-    # Build error string
     dtype = data.dtype
-    predictions = predictor.predict(training_context)
-    estimated_pixels = convert_predictions_to_pixels(predictions, dtype)
-    error_string = true_pixels - estimated_pixels
-
     if true_pixels.ndim == 2:
         to_reshape = (-1, true_pixels.shape[-1])
         residuals = np.empty((0, true_pixels.shape[-1]), dtype=dtype)
+        error_string = np.empty((0, true_pixels.shape[-1]), dtype=dtype)
     else:
         to_reshape = (-1,)
         residuals = np.empty((0,), dtype=dtype)
+        error_string = np.empty((0,), dtype=dtype)
+
+    # Build error string
+    remaining_samples_to_predict = len(true_pixels)
+    start_index = 0
+    while remaining_samples_to_predict > 0:
+        predict_batch_size = min(remaining_samples_to_predict, 1000)
+        predictions = predictor.predict(
+            training_context[start_index:start_index+predict_batch_size])
+        estimated_pixels = convert_predictions_to_pixels(predictions,
+            dtype)
+        error_string = np.append(error_string,
+            true_pixels[start_index:start_index + predict_batch_size] - \
+            estimated_pixels, axis=0)
+        start_index += predict_batch_size
+        remaining_samples_to_predict -= predict_batch_size
 
     # Build residuals
     residuals = np.append(residuals,
