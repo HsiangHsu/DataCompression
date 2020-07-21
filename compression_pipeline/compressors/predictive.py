@@ -14,7 +14,7 @@ def predictive_comp(data, element_axis, predictor, training_context,
 
     # Build error string
     dtype = data.dtype
-    error_string = np.empty((len(true_pixels),), dtype=dtype)
+    error_string = np.array([], dtype=dtype)
     remaining_samples_to_predict = len(true_pixels)
     start_index = 0
     while remaining_samples_to_predict > 0:
@@ -22,8 +22,8 @@ def predictive_comp(data, element_axis, predictor, training_context,
         dtype = training_context.dtype
         estimated_pixels = convert_predictions_to_pixels(predictor.predict(
             training_context[start_index:start_index + predict_batch_size]), dtype)
-        np.append(error_string,
-                  estimated_pixels - true_pixels[start_index:start_index + predict_batch_size])
+        error_string = np.append(error_string,
+                                 estimated_pixels - true_pixels[start_index:start_index + predict_batch_size])
         start_index += predict_batch_size
         remaining_samples_to_predict -= predict_batch_size
 
