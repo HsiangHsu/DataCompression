@@ -87,6 +87,7 @@ def predictive_comp(data, element_axis, predictors, training_context,
 
 def predictive_decomp(error_string, residuals, predictor, n_prev, pcs, ccs,
     original_shape):
+    exit(-1)
 
     dtype = error_string.dtype
     data = np.empty(original_shape, dtype=dtype)

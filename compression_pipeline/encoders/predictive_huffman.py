@@ -108,8 +108,8 @@ def pred_huffman_enc(compression, pre_metadata, comp_metadata, original_shape,
     codestream += error_code_len.to_bytes(1, 'little')
     codestream += residual_code_len.to_bytes(1, 'little')
     codestream += len(error_codestream).to_bytes(4, 'little')
-    codestream += error_codestream
     codestream += len(residual_codestream).to_bytes(4, 'little')
+    codestream += error_codestream
     codestream += residual_codestream
     f.write(codestream)
     codelen = len(codestream)
@@ -142,6 +142,7 @@ def pred_huffman_enc(compression, pre_metadata, comp_metadata, original_shape,
     bytestream += bytes(error_bytestream)
     bytestream += len(residual_bytestream).to_bytes(4, 'little')
     bytestream += bytes(residual_bytestream)
+    f.write(bytestream)
     bytelen = len(bytestream)
     print(f'\tBytestream: {naturalsize(bytelen)}.')
 
@@ -177,13 +178,13 @@ def pred_huffman_dec(comp_file):
     f = open(comp_file, 'rb')
 
     # Read in sizing and and datatype metadata to reconstruct arrays.
-    n_clf = readint(f, 1)
+    n_pred = readint(f, 1)
     n_errors = readint(f, 4)
     n_residuals = readint(f, 4)
     dtype = np.dtype(chr(readint(f, 1)))
     dsize = dtype.itemsize
     original_shape = read_shape(f)
-    clf = decode_predictor(f)
+    clf = decode_predictor(f, n_pred)
     n_prev = readint(f, 1)
     len_pcs = readint(f, 1)
     pcs = f.read(len_pcs).decode()
@@ -191,11 +192,13 @@ def pred_huffman_dec(comp_file):
     ccs = f.read(len_ccs).decode()
 
     # Reconstruct Huffman code
-    error_codestream_len = readint(f, 4)
-    residual_codestream_len = readint(f, 4)
+    error_shape = read_shape(f)
+    residual_shape = read_shape(f)
     symbol_len = readint(f, 1)
     error_code_len = readint(f, 1)
     residual_code_len = readint(f, 1)
+    error_codestream_len = readint(f, 4)
+    residual_codestream_len = readint(f, 4)
 
     # Error codestream
     codebytes_read = 0
@@ -232,15 +235,14 @@ def pred_huffman_dec(comp_file):
         code = f'{code:0{codelen}b}'
         residual_code[k][1] = code
 
-    error_bytestream_len = readint(f, 4)
     error_padding_bits = readint(f, 1)
+    residual_padding_bits = readint(f, 1)
+    error_bytestream_len = readint(f, 4)
     error_bitstream_len = error_bytestream_len*8 - error_padding_bits
     error_bytestream = f.read(error_bytestream_len)
-
     residual_bytestream_len = readint(f, 4)
-    residual_padding_bits = readint(f, 1)
-    residual_bitstream_len = residual_bytestream_len*8 - residual_padding_bits
     residual_bytestream = f.read(residual_bytestream_len)
+    residual_bitstream_len = residual_bytestream_len*8 - residual_padding_bits
 
     error_string = np.empty((n_errors,), dtype=dtype)
     residuals = np.empty((n_residuals,), dtype=dtype)
@@ -252,16 +254,10 @@ def pred_huffman_dec(comp_file):
     residual_decoded_stream = huffman_decode(residual_bytestream,
         residual_bitstream_len, residual_decodings)
 
-    error_string = np.array(error_decoded_stream, dtype=np.uint)
-    residuals = np.array(residual_decoded_stream, dtype=np.uint)
-
-    # RGB data
-    if len(original_shape) == 4 and original_shape[-1] == 3:
-        error_string = int_to_rgb(error_string)
-        residuals = int_to_rgb(residuals)
-    else:
-        error_string = error_string.astype(np.uint8)
-        residuals = residuals.astype(np.uint8)
+    error_string = np.array(error_decoded_stream, dtype=dtype).reshape(
+        error_shape)
+    residuals = np.array(residual_decoded_stream, dtype=dtype).reshape(
+        residual_shape)
 
     return (error_string, residuals, clf), None, (n_prev, pcs, ccs), \
         original_shape
@@ -325,7 +321,7 @@ def encode_predictor(metastream, clf):
 
     for pred in clf:
         b_coef = pred.coef_.tobytes()
-        metastream += len(b_coef).to_bytes(2, 'little')
+        metastream += len(b_coef).to_bytes(4, 'little')
         metastream += b_coef
         metastream += write_shape(pred.coef_.shape)
 
@@ -350,7 +346,7 @@ def decode_predictor(f, n_pred):
 
     clf = [predictors[pred_name]() for i in range(n_pred)]
     for pred in clf:
-        len_b_coef = readint(f, 2)
+        len_b_coef = readint(f, 4)
         b_coef = f.read(len_b_coef)
         coef_shape = read_shape(f)
         coef = np.frombuffer(b_coef).reshape(coef_shape)
