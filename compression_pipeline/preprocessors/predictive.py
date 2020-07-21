@@ -170,12 +170,12 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs, prev_conte
         training_context = np.array(training_context)
         clf = linear_model.LinearRegression()
     elif predictor_family == 'logistic':
-        # training_context = csr_matrix(training_context)
+        training_context = csr_matrix(training_context)
         clf = linear_model.SGDClassifier(loss='log', n_jobs=-1)
     clf.fit(training_context, true_pixels)
     end_model_fitting = timer()
     print(f'\tTrained a {predictor_family} model in ' + \
         f'{timedelta(seconds=end_model_fitting-start)}.\n')
-    # print('\t\t(Accuracy: %05f)\n' %  __compute_classifier_accuracy(clf, predictor_family, training_context, true_pixels))
+    print('\t\t(Accuracy: %05f)\n' %  __compute_classifier_accuracy(clf, predictor_family, training_context, true_pixels))
     return ordered_dataset, 0, (clf, training_context, true_pixels,
         num_prev_imgs, prev_context, cur_context)
