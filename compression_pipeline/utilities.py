@@ -10,13 +10,13 @@ import numpy as np
 
 def valid_pixels_from_context_strategy(img_shape, relative_indices):
     '''
-    Returns the minimum and maximum values for rows/columns to iterate over within an 
-    image of dimension |img_shape| that can be sequentially decoded 
-    in a linear scan pattern given sufficient initial context. 
+    Returns the minimum and maximum values for rows/columns to iterate over within an
+    image of dimension |img_shape| that can be sequentially decoded
+    in a linear scan pattern given sufficient initial context.
 
-    TODO(for more general raster scans): Because we do not currently support scan patterns 
-    or initial context that is "ahead of"  (either to the right or below) a current pixel, 
-    we require relative context indices to be negative-valued in the row or zero in the 
+    TODO(for more general raster scans): Because we do not currently support scan patterns
+    or initial context that is "ahead of"  (either to the right or below) a current pixel,
+    we require relative context indices to be negative-valued in the row or zero in the
     current row but negative in the column.
     '''
     err_msg = "Impossible to satisfy passing initial context with these relative indices %r"
@@ -30,11 +30,11 @@ def valid_pixels_from_context_strategy(img_shape, relative_indices):
     return min_x, max_x, min_y, max_y
 
 
-def get_valid_pixels_for_predictions(img_shape, current_context_indices, 
+def get_valid_pixels_for_predictions(img_shape, current_context_indices,
                                      prev_context_indices, return_tuples=False):
     '''
-    Returns locations within an image of dimension |img_shape| that can be sequentially 
-    decoded in a linear scan pattern given sufficient initial context and previous 
+    Returns locations within an image of dimension |img_shape| that can be sequentially
+    decoded in a linear scan pattern given sufficient initial context and previous
     context indices.
 
     Args:
@@ -55,7 +55,7 @@ def get_valid_pixels_for_predictions(img_shape, current_context_indices,
                 indices from the range [min_x, max_x] x [min_y, max_y]
         Else
             (min_x, max_x, min_y, max_y): 4-tuple of ints
-                inclusive indices for rows/columns that are valid to predict 
+                inclusive indices for rows/columns that are valid to predict
                 given sufficient context
     '''
     min_x_cur, max_x_cur, min_y_cur, max_y_cur = valid_pixels_from_context_strategy(
@@ -90,6 +90,20 @@ def convert_predictions_to_pixels(predictions, dtype):
     '''
     minval, maxval = np.iinfo(dtype).min, np.iinfo(dtype).max
     return np.clip(predictions, minval, maxval).astype(dtype)
+
+
+def rgb_to_int(rgbs):
+    ints = np.array((rgbs.shape[0]), dtype=np.uint32)
+    ints = rgbs[:,0] + rgbs[:,1]*256 + rgbs[:,2]*256**2
+    return ints
+
+
+def int_to_rgb(ints):
+    rgbs = np.empty((ints.shape[0], 3), dtype=np.uint8)
+    rgbs[:,0] = ints % 256
+    rgbs[:,1] = ints // 256 % 256
+    rgbs[:,2] = ints // 256**2 % 256
+    return rgbs
 
 
 def find_dtype(n):

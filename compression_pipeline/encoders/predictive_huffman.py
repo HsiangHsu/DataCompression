@@ -12,7 +12,7 @@ import numpy as np
 import pickle
 from sklearn import linear_model
 
-from utilities import readint
+from utilities import readint, rgb_to_int, int_to_rgb
 
 
 def pred_huffman_enc(compression, pre_metadata, comp_metadata, original_shape,
@@ -66,8 +66,13 @@ def pred_huffman_enc(compression, pre_metadata, comp_metadata, original_shape,
 
     f = open('comp.out', 'wb')
     metalen = len(metastream)
-    print(f'\tMetastream: {metalen} bytes')
+    print(f'\tMetastream: {metalen} bytes.')
     f.write(metastream)
+
+    # RGB data
+    if len(original_shape) == 4 and original_shape[-1] == 3:
+        error_string = rgb_to_int(error_string)
+        residuals = rgb_to_int(residuals)
 
     # Generate Huffman code for error string
     freqs = get_freqs(error_string)
@@ -97,7 +102,7 @@ def pred_huffman_enc(compression, pre_metadata, comp_metadata, original_shape,
 
     codelen = len(residual_codestream)+len(error_codestream)+11
     print(f'\tCodestream: {codelen} bytes, {n_error_symbols} / ' + \
-        f'{n_residual_symbols} symbols')
+        f'{n_residual_symbols} symbols.')
     f.write(len(error_codestream).to_bytes(4, 'little'))
     f.write(len(residual_codestream).to_bytes(4, 'little'))
     f.write(symbol_len.to_bytes(1, 'little'))
@@ -127,7 +132,7 @@ def pred_huffman_enc(compression, pre_metadata, comp_metadata, original_shape,
 
     # The first element is not Huffman coded because it is not a delta
     bytestreamlen = len(error_bytestream+residual_bytestream)+5
-    print(f'\tBytestream: {bytestreamlen} bytes')
+    print(f'\tBytestream: {bytestreamlen} bytes.')
     f.write(len(error_bytestream).to_bytes(4, 'little'))
     f.write(error_padding.to_bytes(1, 'little'))
     f.write(bytes(error_bytestream))
@@ -135,7 +140,7 @@ def pred_huffman_enc(compression, pre_metadata, comp_metadata, original_shape,
     f.write(residual_padding.to_bytes(1, 'little'))
     f.write(bytes(residual_bytestream))
 
-    print(f'\tTotal len: {metalen+codelen+bytestreamlen}\n')
+    print(f'\tTotal len: {metalen+codelen+bytestreamlen}.\n')
 
     f.close()
 
@@ -184,7 +189,6 @@ def pred_huffman_dec(comp_file):
     ccs = f.read(len_ccs).decode()
 
     # Reconstruct Huffman code
-
     error_codestream_len = readint(f, 4)
     residual_codestream_len = readint(f, 4)
     symbol_len = readint(f, 1)
@@ -246,8 +250,16 @@ def pred_huffman_dec(comp_file):
     residual_decoded_stream = huffman_decode(residual_bytestream,
         residual_bitstream_len, residual_decodings)
 
-    error_string = np.array(error_decoded_stream, dtype=dtype)
-    residuals = np.array(residual_decoded_stream, dtype=dtype)
+    error_string = np.array(error_decoded_stream, dtype=np.uint)
+    residuals = np.array(residual_decoded_stream, dtype=np.uint)
+
+    # RGB data
+    if len(original_shape) == 4 and original_shape[-1] == 3:
+        error_string = int_to_rgb(error_string)
+        residuals = int_to_rgb(residuals)
+    else:
+        error_string = error_string.astype(np.uint8)
+        residuals = residuals.astype(np.uint8)
 
     return (error_string, residuals, clf), None, (n_prev, pcs, ccs), \
         original_shape

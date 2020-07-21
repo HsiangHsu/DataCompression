@@ -72,7 +72,7 @@ def extract_training_pairs(ordered_dataset, num_prev_imgs, prev_context_indices,
     Assumes |prev_context_indices| and |current_context_indices| are lists of relative indices on (i, j)
     '''
     pixels_to_predict = get_valid_pixels_for_predictions(ordered_dataset[0].shape,
-                                                         current_context_indices, prev_context_indices, 
+                                                         current_context_indices, prev_context_indices,
                                                          return_tuples=True)
     X_train = []
     Y_train = []
@@ -148,6 +148,8 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs, prev_conte
         start = timer()
         training_context, true_pixels = extract_training_pairs(ordered_dataset,
             num_prev_imgs, prev_context_indices, current_context_indices)
+        training_context, true_pixels = np.array(training_context), np.array(true_pixels)
+        training_context = training_context.reshape(training_context.shape[0], -1)
         end_extraction = timer()
         print(f'\tExtracted training pairs in ' + \
             f'{timedelta(seconds=end_extraction-start)}.')
@@ -159,12 +161,12 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs, prev_conte
     if predictor_family == 'linear':
         clf = linear_model.LinearRegression()
     elif predictor_family == 'logistic':
-        training_context = csr_matrix(training_context)
+        # training_context = csr_matrix(training_context)
         clf = linear_model.SGDClassifier(loss='log', n_jobs=-1)
     clf.fit(training_context, true_pixels)
     end_model_fitting = timer()
     print(f'\tTrained a {predictor_family} model in ' + \
-        f'{timedelta(seconds=end_model_fitting-start)}.')
-    print('\t\t(Accuracy: %05f)\n' %  __compute_classifier_accuracy(clf, predictor_family, training_context, true_pixels))
+        f'{timedelta(seconds=end_model_fitting-start)}.\n')
+    # print('\t\t(Accuracy: %05f)\n' %  __compute_classifier_accuracy(clf, predictor_family, training_context, true_pixels))
     return ordered_dataset, 0, (clf, training_context, true_pixels,
         num_prev_imgs, prev_context, cur_context)
