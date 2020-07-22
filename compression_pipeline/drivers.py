@@ -73,7 +73,7 @@ def preprocess(data, args):
         if args.feature_file is not None:
             return train_predictor(args.predictor_family, ordered_data,
                 args.num_prev_imgs, args.prev_context, args.curr_context,
-                args.rgb_mode,
+                args.mode,
                 should_extract_training_pairs=False,
                 training_filenames=(args.feature_file, args.label_file))
         return train_predictor(args.predictor_family, ordered_data,
