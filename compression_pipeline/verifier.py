@@ -10,5 +10,7 @@ import numpy as np
 data_in = np.load('data_in.npy')
 data_out = np.load('data_out.npy')
 
-assert np.array_equiv(np.sort(data_in, axis=0), np.sort(data_out, axis=0)), \
-    'data_in and data_out differ'
+if np.array_equiv(np.sort(data_in, axis=0), np.sort(data_out, axis=0)):
+    print('\n\tCOMPRESSION CORRECT.\n')
+else:
+    print('\n\tCOMPRESSION INCORRECT.\n')

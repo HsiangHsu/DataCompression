@@ -345,7 +345,7 @@ def decode_predictor(f, n_pred):
     pred_name = f.read(len_pred_name).decode()
 
     clf = [predictors[pred_name]() for i in range(n_pred)]
-    for pred in clf:
+    for i in range(len(clf)):
         len_b_coef = readint(f, 4)
         b_coef = f.read(len_b_coef)
         coef_shape = read_shape(f)
@@ -361,11 +361,11 @@ def decode_predictor(f, n_pred):
             b_classes = f.read(len_b_classes)
             classes = np.frombuffer(b_classes, dtype=np.uint8)
 
-        pred = predictors[pred_name]()
-        pred.coef_ = coef
-        pred.intercept_ = intercept
+        clf[i] = predictors[pred_name]()
+        clf[i].coef_ = coef
+        clf[i].intercept_ = intercept
         if pred_name == 'SGDClassifier':
-            pred.classes_ = classes
+            clf[i].classes_ = classes
 
     return clf
 

@@ -208,7 +208,8 @@ def decompress(compression, comp_metadata, original_shape, args):
     if decompressor == 'knn-mst':
         return knn_mst_decomp(compression, comp_metadata, original_shape)
     elif decompressor == 'predictive':
-        return predictive_decomp(*compression, *comp_metadata, original_shape)
+        return predictive_decomp(*compression, *comp_metadata, original_shape,
+            args.mode)
 
 
 def postprocess(decomp, pre_metadata, args):

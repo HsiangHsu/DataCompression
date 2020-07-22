@@ -63,7 +63,7 @@ def load(dataset):
         data = idx2numpy.convert_from_file(os.path.join(dirpath, datapath))
         labels = idx2numpy.convert_from_file(
             os.path.join(dirpath, labelpath))
-        return (data[:10], labels)
+        return (data, labels)
 
     elif dataset == 'cifar-10':
         data = np.empty((50000, 3072), dtype=np.uint8)
@@ -74,7 +74,7 @@ def load(dataset):
                 data[(i-1)*10000:i*10000] = raw_data[b'data']
         # RGB triples
         data = data.reshape((50000, 3, 32, 32)).transpose((0, 2, 3, 1))
-        return (data[:10], None)
+        return (data, None)
 
     elif dataset == 'adult':
         datapath = 'adult.data'

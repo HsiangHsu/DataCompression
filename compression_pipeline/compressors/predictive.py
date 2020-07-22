@@ -21,21 +21,19 @@ def predictive_comp(data, element_axis, predictors, training_context,
         assert mode == 'single'
         to_reshape = (-1, true_pixels.shape[-1])
         residuals = np.empty((0, true_pixels.shape[-1]), dtype=dtype)
-        error_string = np.empty((1, *true_pixels.shape[1:]), dtype=dtype)
     elif true_pixels.ndim == 2:
         if mode == 'single':
             # Grayscale singles
             to_reshape = (-1,)
             residuals = np.empty((0,), dtype=dtype)
-            error_string = np.empty((1, true_pixels.shape[1],), dtype=dtype)
         elif mode == 'triple':
             # RGB singles
             to_reshape = (-1, true_pixels.shape[0])
             residuals = np.empty((0, true_pixels.shape[0]), dtype=dtype)
-            error_string = np.empty(true_pixels.shape, dtype=dtype)
     else:
         print('Bad shape for true_pixels.')
         exit(-1)
+    error_string = np.empty(true_pixels.shape, dtype=dtype)
 
     # Build error string
     remaining_samples_to_predict = true_pixels.shape[1]
@@ -85,9 +83,8 @@ def predictive_comp(data, element_axis, predictors, training_context,
     return (error_string, residuals, predictors), None, data.shape
 
 
-def predictive_decomp(error_string, residuals, predictor, n_prev, pcs, ccs,
-    original_shape):
-    exit(-1)
+def predictive_decomp(error_string, residuals, predictors, n_prev, pcs, ccs,
+    original_shape, mode):
 
     dtype = error_string.dtype
     data = np.empty(original_shape, dtype=dtype)
@@ -100,11 +97,19 @@ def predictive_decomp(error_string, residuals, predictor, n_prev, pcs, ccs,
     r_end += 1
     c_end += 1
 
-    if error_string.ndim == 2:
-        to_reshape = (original_shape[0]-n_prev, r_end-r_start, c_end-c_start, \
-            error_string.shape[1])
-    else:
-        to_reshape = (original_shape[0]-n_prev, r_end-r_start, c_end-c_start)
+    if error_string.ndim == 3:
+        # RGB triples
+        to_reshape = (1, original_shape[0]-n_prev, r_end-r_start, \
+            c_end-c_start, 3)
+    elif error_string.ndim == 2:
+        if mode == 'single':
+            # Grayscale singles
+            to_reshape = (1, original_shape[0]-n_prev, r_end-r_start, \
+            c_end-c_start)
+        elif mode == 'triple':
+            # RGB singles
+            to_reshape = (3, original_shape[0]-n_prev, r_end-r_start, \
+            c_end-c_start)
     errors = error_string.reshape(to_reshape)
 
     to_pop = n_prev * original_shape[1] * original_shape[2]
@@ -118,11 +123,16 @@ def predictive_decomp(error_string, residuals, predictor, n_prev, pcs, ccs,
         # Run predictor over remaining pixels
         for r in range(r_start, r_end):
             for c in range(c_start, c_end):
-                context = get_context(data, n_prev, pcs, ccs, n, r, c)
-                prediction = predictor.predict(context)
-                prediction = predictions_to_pixels(prediction, dtype)
-                data[n,r,c] = prediction + errors[n-n_prev, r-r_start,
-                    c-c_start]
+                for i in range(len(predictors)):
+                    context = get_context(data, n_prev, pcs, ccs, n, r, c)
+                    prediction = predictors[i].predict(context)
+                    prediction = predictions_to_pixels(prediction, dtype)
+                    if mode == 'triple':
+                        data[n,r,c,i] = prediction + errors[i, n-n_prev,
+                            r-r_start, c-c_start]
+                    elif mode == 'single':
+                        data[n,r,c] = prediction + errors[i, n-n_prev,
+                            r-r_start, c-c_start]
 
     assert len(residuals) == 0, \
         f'Not all residuals were consumed: {len(residuals)} pixels leftover.'
