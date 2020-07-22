@@ -213,6 +213,12 @@ def get_context(data, n_prev, pcs, ccs, n, r, c):
             context[0, len(ccs)+4*p+1] = data[n-(p+1),r-1,c-1].flatten()
             context[0, len(ccs)+4*p+2] = data[n-(p+1),r-1,c].flatten()
             context[0, len(ccs)+4*p+3] = data[n-(p+1),r-1,c+1].flatten()
+    elif pcs == 'DABX':
+        for p in range(n_prev):
+            context[0, len(ccs)+4*p] = data[n-(p+1),r,c-1].flatten()
+            context[0, len(ccs)+4*p+1] = data[n-(p+1),r-1,c-1].flatten()
+            context[0, len(ccs)+4*p+2] = data[n-(p+1),r-1,c].flatten()
+            context[0, len(ccs)+4*p+3] = data[n-(p+1),r,c].flatten()
     else:
         print(f'Previous context string {pcs} unsupported by decompressor.')
         exit(-1)

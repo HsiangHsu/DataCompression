@@ -50,11 +50,12 @@ pre_group.add_argument('--predictor-family', type=str, default='linear',
     dest='predictor_family', choices=['linear', 'logistic'],
     help='model class to use for predicting pixels')
 pixel_context_strategies = ['DAB', 'DABC']
+prev_pixel_context_strategies = pixel_context_strategies + ['DABX']
 pre_group.add_argument('--ordering', type=str, default='random',
     choices=['random', 'mst', 'hamiltonian'],
     help='dataset ordering strategy for predictive coding')
 pre_group.add_argument('--prev-context', type=str, default='DAB',
-    dest='prev_context', choices = pixel_context_strategies,
+    dest='prev_context', choices = prev_pixel_context_strategies,
     help='context pixels for predictive coding prior images')
 pre_group.add_argument('--current-context', type=str, default='DAB',
     dest='curr_context', choices = pixel_context_strategies,

@@ -8,19 +8,21 @@ from math import ceil, log2
 import numpy as np
 
 
-def valid_pixels_from_context_strategy(img_shape, relative_indices):
+def valid_pixels_from_context_strategy(img_shape, relative_indices, no_input_check=False):
     '''
     Returns the minimum and maximum values for rows/columns to iterate over within an
     image of dimension |img_shape| that can be sequentially decoded
     in a linear scan pattern given sufficient initial context.
 
-    TODO(for more general raster scans): Because we do not currently support scan patterns
-    or initial context that is "ahead of"  (either to the right or below) a current pixel,
-    we require relative context indices to be negative-valued in the row or zero in the
+    If |no_input_check|, we assume usage involves scan patterns or context that is "ahead of"  
+    (either to the right or below) a current pixel, which is possible for previous images
+    that have been fully decoded.
+    
+    Otherwise we require relative context indices to be negative-valued in the row or zero in the
     current row but negative in the column.
     '''
     err_msg = "Impossible to satisfy passing initial context with these relative indices %r"
-    assert np.all([index[0] < 0 or \
+    assert no_input_check or np.all([index[0] < 0 or \
                   (index[0] == 0 and index[1] < 0) for index in relative_indices]), \
            err_msg % relative_indices
     min_x = abs(min([index[0] for index in relative_indices]))
@@ -61,7 +63,8 @@ def get_valid_pixels_for_predictions(img_shape, current_context_indices,
     min_x_cur, max_x_cur, min_y_cur, max_y_cur = valid_pixels_from_context_strategy(
                                                     img_shape, current_context_indices)
     min_x_prev, max_x_prev, min_y_prev, max_y_prev = valid_pixels_from_context_strategy(
-                                                        img_shape, prev_context_indices)
+                                                        img_shape, prev_context_indices, 
+                                                        no_input_check=True)
     min_x = max(min_x_cur, min_x_prev)
     max_x = min(max_x_cur, max_x_prev)
     min_y = max(min_y_cur, min_y_prev)
@@ -80,6 +83,8 @@ def name_to_context_pixels(name):
         return [(0, -1), (-1, -1), (-1, 0)]
     if name == 'DABC':
         return [(0, -1), (-1, -1), (-1, 0), (-1, 1)]
+    if name == 'DABX':  
+        return [(0, -1), (-1, -1), (-1, 0), (0, 0)]
     return None
 
 
