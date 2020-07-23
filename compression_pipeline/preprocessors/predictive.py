@@ -97,7 +97,11 @@ def __compute_classifier_accuracy(clf, predictor_family, training_context, true_
             predict_batch_size = min(remaining_samples_to_predict, 1000)
             dtype = training_context.dtype
             estimated_pixels = predictions_to_pixels(clf.predict(training_context[start_index:start_index + predict_batch_size]), dtype)
-            right_pixels_count += np.count_nonzero(np.all(estimated_pixels == true_pixels[start_index:start_index + predict_batch_size], axis=1))
+            estimated_pixels = estimated_pixels.reshape(true_pixels[start_index:start_index + predict_batch_size].shape)
+            if len(estimated_pixels.shape) > 1:
+                right_pixels_count += np.count_nonzero(np.all(estimated_pixels == true_pixels[start_index:start_index + predict_batch_size], axis=1))
+            else:
+                right_pixels_count += np.count_nonzero(estimated_pixels == true_pixels[start_index:start_index + predict_batch_size])
             start_index += predict_batch_size
             remaining_samples_to_predict -= predict_batch_size
         return right_pixels_count / len(true_pixels)
