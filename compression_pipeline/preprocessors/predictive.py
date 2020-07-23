@@ -91,16 +91,16 @@ def extract_training_pairs(ordered_dataset, num_prev_imgs, prev_context_indices,
 def __compute_classifier_accuracy(clf, predictor_family, training_context, true_pixels):
     if predictor_family == 'logistic' or predictor_family == 'linear':
         remaining_samples_to_predict = len(true_pixels)
-        wrong_pixels_count = 0
+        right_pixels_count = 0
         start_index = 0
         while remaining_samples_to_predict > 0:
             predict_batch_size = min(remaining_samples_to_predict, 1000)
             dtype = training_context.dtype
             estimated_pixels = predictions_to_pixels(clf.predict(training_context[start_index:start_index + predict_batch_size]), dtype)
-            wrong_pixels_count += np.count_nonzero(estimated_pixels - true_pixels[start_index:start_index + predict_batch_size])
+            right_pixels_count += np.count_nonzero(np.all(estimated_pixels == true_pixels[start_index:start_index + predict_batch_size], axis=1))
             start_index += predict_batch_size
             remaining_samples_to_predict -= predict_batch_size
-        return 1 - wrong_pixels_count / len(true_pixels)
+        return right_pixels_count / len(true_pixels)
     assert False, 'Must be a logistic or linear predictor to compute accuracy'
 
 
