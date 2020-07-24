@@ -170,6 +170,10 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
     elif mode == 'single':
         n_pred = 1
 
+
+    date_str = f'{datetime.now().hour}_{datetime.now().minute}'
+
+    start = timer()
     if not should_extract_training_pairs:
         assert training_filenames is not None, \
             "Must pass filenames for training features and labels if not " + \
@@ -184,7 +188,6 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
         # TODO: Validate loaded training context and true pixels to ensure they
         #       match shape, etc. of parameters and data passed in
     else:
-        start = timer()
         training_context, true_pixels = extract_training_pairs(ordered_dataset,
             num_prev_imgs, prev_context_indices, current_context_indices)
         training_context, true_pixels = np.array(training_context), \
@@ -199,7 +202,6 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
         print(f'\tExtracted training pairs in ' + \
             f'{timedelta(seconds=end_extraction-start)}.')
 
-        date_str = f'{datetime.now().hour}_{datetime.now().minute}'
         np.save(f'training_context_{date_str}', np.array(training_context))
         np.save(f'true_pixels_{date_str}', np.array(true_pixels))
 
@@ -212,15 +214,10 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
         predictors = {'LinearRegression': 'linear',
             'SGDClassifier': 'logistic'}
         pred_name = str(clf[0]).split('(')[0]
-        pred_type = predictors[pred_name]
+        predictor_family = predictors[pred_name]
         end_model_loading = timer()
-        print(f'\tLoaded a {pred_type} model in ' + \
+        print(f'\tLoaded a {predictor_family} model in ' + \
             f'{timedelta(seconds=end_model_loading-start)}.')
-        for i in range(n_pred):
-            print('\t\t(Accuracy: %05f)' % \
-                __compute_classifier_accuracy(clf[i],
-                pred_type, training_context, true_pixels[i]))
-        print()
     else:
         if predictor_family == 'linear':
             clf = [linear_model.LinearRegression(n_jobs=-1) \
@@ -234,14 +231,15 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
         end_model_fitting = timer()
         print(f'\tTrained a {predictor_family} model in ' + \
             f'{timedelta(seconds=end_model_fitting-start)}.')
-        for i in range(n_pred):
-            print('\t\t(Accuracy: %05f)' % \
-                __compute_classifier_accuracy(clf[i],
-                predictor_family, training_context, true_pixels[i]))
-        print()
 
         with open(f'predictor_{date_str}.out', 'wb') as f:
             pickle.dump(clf, f)
+
+    for i in range(n_pred):
+        print('\t\t(Accuracy: %05f)' % \
+            __compute_classifier_accuracy(clf[i],
+            predictor_family, training_context, true_pixels[i]))
+    print()
 
     return ordered_dataset, 0, (clf, training_context, true_pixels,
         num_prev_imgs, prev_context, cur_context)
