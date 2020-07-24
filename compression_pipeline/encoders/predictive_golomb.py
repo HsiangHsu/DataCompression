@@ -17,12 +17,22 @@ from utilities import readint, encode_predictor, decode_predictor, \
     write_shape, read_shape
 
 
-def pred_golomb_enc(compression, pre_metadata, comp_metadata, original_shape,
-    args):
+def pred_golomb_enc(compression, pre_metadata, original_shape, args):
     '''
-    Golomb encoder
+    Golomb encoder for predictive coding.
 
     Args:
+    compression: (numpy array, numpy array, list)
+        compression as returned by the predictive preprocessor, with an
+        error string, a residual string, and a list of predictors
+    pre_metadata: (int, string, string)
+        metadata as returned by the predictive preprocessor, with the number of
+        previous images, the previous context string, and the current context
+        string
+    original_shape: tuple
+        shape of original data
+    args: Namespace
+        command-line argument namespace
 
     Returns:
         None
@@ -87,6 +97,8 @@ def pred_golomb_enc(compression, pre_metadata, comp_metadata, original_shape,
     bytestream += write_shape(residual_shape)
     bytestream += error_padding.to_bytes(1, 'little')
     bytestream += residual_padding.to_bytes(1, 'little')
+    bytestream += args.error_k.to_bytes(1, 'little')
+    bytestream += args.residual_k.to_bytes(1, 'little')
     bytestream += len(error_bytestream).to_bytes(4, 'little')
     bytestream += bytes(error_bytestream)
     bytestream += len(residual_bytestream).to_bytes(4, 'little')
@@ -103,9 +115,9 @@ def pred_golomb_enc(compression, pre_metadata, comp_metadata, original_shape,
         pickle.dump(args, f)
 
 
-def delta_huffman_dec(comp_file):
+def pred_golomb_dec(comp_file):
     '''
-    Delta Vector and Huffman Encoding Decoder
+    Golomb decoder
 
     See docstring on the corresponding encoder for more information.
 
@@ -123,143 +135,62 @@ def delta_huffman_dec(comp_file):
         original_shape: tuple
             shape of original data
     '''
+
     f = open(comp_file, 'rb')
 
     # Read in sizing and and datatype metadata to reconstruct arrays.
-    n_layers = readint(f, 4)
-    n_elements = readint(f, 4)
-    n_points = readint(f, 4)
-    comp_dtype = np.dtype(chr(readint(f, 1)))
-    original_shape_len = readint(f, 1)
-    shape_values = []
-    for i in range(original_shape_len):
-        shape_values.append(readint(f, 4))
-    original_shape = tuple(shape_values)
+    n_pred = readint(f, 1)
+    n_errors = readint(f, 4)
+    n_residuals = readint(f, 4)
+    dtype = np.dtype(chr(readint(f, 1)))
+    dsize = dtype.itemsize
+    original_shape = read_shape(f)
+    clf = decode_predictor(f, n_pred)
+    n_prev = readint(f, 1)
+    len_pcs = readint(f, 1)
+    pcs = f.read(len_pcs).decode()
+    len_ccs = readint(f, 1)
+    ccs = f.read(len_ccs).decode()
 
-    data_size = comp_dtype.itemsize
+    error_shape = read_shape(f)
+    residual_shape = read_shape(f)
+    error_padding_bits = readint(f, 1)
+    residual_padding_bits = readint(f, 1)
+    error_k = readint(f, 1)
+    residual_k = readint(f, 1)
+    error_bytestream_len = readint(f, 4)
+    error_bitstream_len = error_bytestream_len*8 - error_padding_bits
+    error_bytestream = f.read(error_bytestream_len)
+    residual_bytestream_len = readint(f, 4)
+    residual_bytestream = f.read(residual_bytestream_len)
+    residual_bitstream_len = residual_bytestream_len*8 - residual_padding_bits
 
-    pre_meta_included = readint(f, 1)
-    if pre_meta_included:
-        pre_meta_shape_len = readint(f, 1)
-        pre_meta_shape_values = []
-        for i in range(pre_meta_shape_len):
-            pre_meta_shape_values.append(readint(f, 4))
-        pre_meta_shape = tuple(pre_meta_shape_values)
-        pre_meta_dtype = np.dtype(chr(readint(f, 1)))
-        pre_meta_size = pre_meta_dtype.itemsize
-        to_read = np.prod(pre_meta_shape) * pre_meta_dtype.itemsize
-        pre_metadata = np.frombuffer(f.read(to_read), dtype=pre_meta_dtype)
-        pre_metadata = pre_metadata.reshape(pre_meta_shape)
-    else:
-        pre_metadata = None
+    error_string = np.empty((n_errors,), dtype=dtype)
+    residuals = np.empty((n_residuals,), dtype=dtype)
 
-    comp_meta_included = readint(f, 1)
-    if comp_meta_included:
-        comp_meta_dtype = np.dtype(chr(readint(f, 1)))
-        comp_meta_size = comp_meta_dtype.itemsize
-        comp_metadata = np.empty((n_layers, n_elements), dtype=comp_meta_dtype)
-        for i in range(n_layers):
-            for j in range(n_elements):
-                metadata[i][j] = readint(f, comp_meta_size)
-    else:
-        comp_metadata = None
+    error_decoded_stream = golomb_decode(error_bytestream, error_bitstream_len,
+        error_k)
+    residual_decoded_stream = golomb_decode(residual_bytestream,
+        residual_bitstream_len, residual_k)
 
-    compression = np.empty((n_layers, n_elements, n_points), dtype=comp_dtype)
+    error_string = np.array(error_decoded_stream, dtype=dtype).reshape(
+        error_shape)
+    residuals = np.array(residual_decoded_stream, dtype=dtype).reshape(
+        residual_shape)
 
-    for i in range(n_layers):
-        codestream_len = readint(f, 4)
-        symbol_len = readint(f, 1)
-        code_len = readint(f, 1)
-
-        # Reconstruct Huffman code
-        codebytes_read = 0
-        raw_code = []
-        while codebytes_read < codestream_len:
-            raw_code.append([readint(f, symbol_len), readint(f, code_len)])
-            codebytes_read += symbol_len + code_len
-        reconstructed_code = deepcopy(raw_code)
-        codelen = raw_code[0][1]
-        code = f'{0:0{codelen}b}'
-        reconstructed_code[0][1] = code
-        for k in range(1, len(raw_code)):
-            codelen = raw_code[k][1]
-            code = int(code, 2) + 1
-            code = code << (codelen - raw_code[k-1][1])
-            code = f'{code:0{codelen}b}'
-            reconstructed_code[k][1] = code
-
-        bytestream_len = readint(f, 4)
-        padding_bits = readint(f, 1)
-        bitstream_len = bytestream_len*8 - padding_bits
-        bytestream = f.read(bytestream_len)
-
-        for j in range(n_points):
-            compression[i][0][j] = readint(f, data_size)
-
-        # Corner case where there is no difference across layer
-        if bytestream_len == 0:
-            for j in range(1, n_elements):
-                compression[i][j] = compression[i][0]
-            continue
-
-        decodings = {v: k for k, v in dict(reconstructed_code).items()}
-        decoded_stream = huffman_decode(bytestream, bitstream_len, decodings)
-        deltas = np.array(decoded_stream, dtype=comp_dtype)
-        deltas = deltas.reshape(n_elements-1, n_points)
-
-        for j in range(1, n_elements):
-            compression[i][j] = compression[i][j-1] + deltas[j-1]
-
-    return compression, pre_metadata, comp_metadata, original_shape
+    return (error_string, residuals, clf), None, (n_prev, pcs, ccs), \
+        original_shape
 
 
-def huffman_encode(symb2freq):
-    heap = [[wt, [sym, ""]] for sym, wt in symb2freq.items()]
-    heapify(heap)
-    while len(heap) > 1:
-        lo = heappop(heap)
-        hi = heappop(heap)
-        for pair in lo[1:]:
-            pair[1] = '0' + pair[1]
-        for pair in hi[1:]:
-            pair[1] = '1' + pair[1]
-        heappush(heap, [lo[0] + hi[0]] + lo[1:] + hi[1:])
-    non_canonical = sorted(heappop(heap)[1:], key=lambda p: (len(p[-1]), p))
-
-    canonical = deepcopy(non_canonical)
-    codelen = len(non_canonical[0][1])
-    code = f'{0:0{codelen}b}'
-    canonical[0][1] = code
-    for i in range(1, len(non_canonical)):
-        codelen = len(non_canonical[i][1])
-        code = int(code, 2) + 1
-        code = code << (codelen - len(non_canonical[i-1][1]))
-        code = f'{code:0{codelen}b}'
-        canonical[i][1] = code
-
-    return canonical
-
-
-def huffman_decode(bytestream, length, decodings):
-    bitstream_array = BitArray(bytestream).bin
-    decoded_stream = list()
-    index = 0
-    while (index < length):
-        possible_encoding = bitstream_array[index]
-        possible_end_index = index + 1
-        while (possible_encoding not in decodings):
-            possible_end_index += 1
-            possible_encoding = bitstream_array[index:possible_end_index]
-        decoded_stream.append(decodings[possible_encoding])
-        index = possible_end_index
+def golomb_decode(bytestream, bitstream_len, k):
+    bitstream = BitArray(bytestream).bin
+    decoded_stream = []
+    bits_read = 0
+    lower = int(log2(k))
+    while bits_read < bitstream_len:
+        idx = bitstream.find('1')
+        unary, binary, bitstream = bitstream[:idx], \
+            bitstream[idx+1:idx+1+lower], bitstream[idx+1+lower:]
+        bits_read += idx+1+lower
+        decoded_stream.append(len(unary)*k + int(binary, base=2))
     return decoded_stream
-
-
-def get_freqs(values):
-    freqs = dict()
-    for val in values:
-        try:
-            freqs[val] += 1
-        except KeyError:
-            freqs[val] = 1
-    return freqs

@@ -70,6 +70,8 @@ pre_group.add_argument('--label-file', type=str, dest='label_file',
     required=False)
 pre_group.add_argument('--predictor-file', type=str, dest='predictor_file',
     required=False)
+pre_group.add_argument('--load-state', type=int, dest='load_state',
+    nargs=2, required=False)
 
 comp_group = parser.add_argument_group('compressor')
 comp_group.add_argument('--comp', type=str, choices=['knn-mst', 'predictive'],

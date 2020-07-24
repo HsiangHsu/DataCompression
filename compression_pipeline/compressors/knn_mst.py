@@ -63,7 +63,6 @@ def knn_mst_comp(data, element_axis, metric, minkowski_p, k=1000):
     ordered_data = np.empty(data.shape, dtype=data.dtype)
 
     for i in range(n_layers):
-        print(f'\tLayer {i}:')
         start = timer()
 
         # Builds a separate KNN graph and MST for each patch on each layer
@@ -79,7 +78,7 @@ def knn_mst_comp(data, element_axis, metric, minkowski_p, k=1000):
             raise DisconnectedKNN("KNN graph is disconnected. Increase K.")
 
         end = timer()
-        print(f'\t{k}-nn_graph in {timedelta(seconds=end-start)}.')
+        print(f'\t{k}-nn graph in {timedelta(seconds=end-start)}.')
         start = timer()
 
         mst = minimum_spanning_tree(knn_graph, overwrite=True)

@@ -16,12 +16,22 @@ from utilities import readint, encode_predictor, decode_predictor, \
     write_shape, read_shape
 
 
-def pred_huffman_enc(compression, pre_metadata, comp_metadata, original_shape,
-    args):
+def pred_huffman_enc(compression, pre_metadata, original_shape, args):
     '''
-    Huffman encoder
+    Huffman encoder for predictive coding.
 
     Args:
+    compression: (numpy array, numpy array, list)
+        compression as returned by the predictive preprocessor, with an
+        error string, a residual string, and a list of predictors
+    pre_metadata: (int, string, string)
+        metadata as returned by the predictive preprocessor, with the number of
+        previous images, the previous context string, and the current context
+        string
+    original_shape: tuple
+        shape of original data
+    args: Namespace
+        command-line argument namespace
 
     Returns:
         None
@@ -52,7 +62,6 @@ def pred_huffman_enc(compression, pre_metadata, comp_metadata, original_shape,
     metastream += len(ccs).to_bytes(1, 'little')
     metastream += ccs.encode()
 
-    # TODO: FOR TESTING ONLY. REMOVE.
     f = open('comp.out', 'wb')
     # f = open(f'data/predictive/{args.dataset}_{args.predictor_family}_{args.prev_context}_{args.curr_context}_{args.num_prev_imgs}_comp.out', 'wb')
     metalen = len(metastream)
@@ -139,7 +148,6 @@ def pred_huffman_enc(compression, pre_metadata, comp_metadata, original_shape,
 
     f.close()
 
-    # TODO
     with open('args.out', 'wb') as f:
     # with open(f'data/predictive/{args.dataset}_{args.predictor_family}_{args.prev_context}_{args.curr_context}_{args.num_prev_imgs}_args.out', 'wb') as f:
         pickle.dump(args, f)
