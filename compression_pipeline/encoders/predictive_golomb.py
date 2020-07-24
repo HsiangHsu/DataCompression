@@ -8,79 +8,94 @@ from bitstring import BitArray
 from copy import deepcopy
 from golomb_coding import golomb_coding
 from heapq import heappush, heappop, heapify
+from humanize import naturalsize
 from math import ceil, log2
 import numpy as np
 import pickle
 
-from utilities import readint
+from utilities import readint, encode_predictor, decode_predictor, \
+    write_shape, read_shape
 
 
 def pred_golomb_enc(compression, pre_metadata, comp_metadata, original_shape,
     args):
     '''
-    Huffman encoder
+    Golomb encoder
 
     Args:
-        compression: numpy array
-            compressed data to be encoded, of shape
-            (n_layers, n_elements, n_points)
-        metadata:
-            metadata for compression (not necessarily the same metadata
-            that is returned by the loader), of shape
-            (n_layers, n_elements); since this encoder is intended
-            to be used with smart orderings, this will probably be inverse
-            orderings of some sort
-        original_shape: tuple
-            shape of original data
-        args: dict
-            all command line arguments passed to driver_compress.py
 
     Returns:
         None
     '''
 
     error_string, residuals, clf = compression
+    n_clf = len(clf)
     n_errors = error_string.shape[0]
     n_residuals = residuals.shape[0]
-    b_clf = pickle.dumps(clf)
+    n_prev = pre_metadata[0]
+    pcs = pre_metadata[1]
+    ccs = pre_metadata[2]
 
     # Bytestreams to be built and written
     metastream = b''
 
     # Metadata needed to reconstruct arrays: shape and dtype.
     # 4 bytes are used to be fit a reasonably wide range of values
+    metastream += n_clf.to_bytes(1, 'little')
     metastream += n_errors.to_bytes(4, 'little')
     metastream += n_residuals.to_bytes(4, 'little')
     metastream += ord(error_string.dtype.char).to_bytes(1, 'little')
-    metastream += len(original_shape).to_bytes(1, 'little')
-    for i in range(len(original_shape)):
-        metastream += original_shape[i].to_bytes(4, 'little')
-    metastream += len(b_clf).to_bytes(4, 'little')
-    metastream += b_clf
+    metastream += write_shape(original_shape)
+    metastream += encode_predictor(clf)
+    metastream += n_prev.to_bytes(1, 'little')
+    metastream += len(pcs).to_bytes(1, 'little')
+    metastream += pcs.encode()
+    metastream += len(ccs).to_bytes(1, 'little')
+    metastream += ccs.encode()
 
     f = open('comp.out', 'wb')
     metalen = len(metastream)
-    print(f'\tMetastream: {metalen} bytes')
+    print(f'\tMetastream: {naturalsize(metalen)}.')
     f.write(metastream)
 
-    bitstream = ''
+    # Generate Golomb coded bytestream
+    error_shape = error_string.shape
+    error_string = error_string.flatten()
+    residual_shape = residuals.shape
+    residuals = residuals.flatten()
+
+    error_bitstream = ''
     for error in error_string:
-        bitstream += golomb_coding(error, 64)
+        error_bitstream += golomb_coding(error, args.error_k)
+    padded_length = 8*ceil(len(error_bitstream)/8)
+    error_padding = padded_length - len(error_bitstream);
+    error_bitstream = f'{error_bitstream:0<{padded_length}}'
+    error_bytestream = [int(error_bitstream[8*j:8*(j+1)], 2)
+        for j in range(len(error_bitstream)//8)]
+
+    residual_bitstream = ''
     for residual in residuals:
-        bitstream += golomb_coding(residual, 16)
-    padded_length = 8*ceil(len(bitstream)/8)
-    padding = padded_length - len(bitstream);
-    bitstream = f'{bitstream:0<{padded_length}}'
-    bytestream = [int(bitstream[8*j:8*(j+1)], 2)
-        for j in range(len(bitstream)//8)]
+        residual_bitstream += golomb_coding(residual, args.residual_k)
+    padded_length = 8*ceil(len(residual_bitstream)/8)
+    residual_padding = padded_length - len(residual_bitstream);
+    residual_bitstream = f'{residual_bitstream:0<{padded_length}}'
+    residual_bytestream = [int(residual_bitstream[8*j:8*(j+1)], 2)
+        for j in range(len(residual_bitstream)//8)]
 
-    bytestreamlen = len(bytestream)+5
-    print(f'\tBytestream: {bytestreamlen} bytes')
-    f.write(len(bytestream).to_bytes(4, 'little'))
-    f.write(padding.to_bytes(1, 'little'))
-    f.write(bytes(bytestream))
+    bytestream = b''
+    bytestream += write_shape(error_shape)
+    bytestream += write_shape(residual_shape)
+    bytestream += error_padding.to_bytes(1, 'little')
+    bytestream += residual_padding.to_bytes(1, 'little')
+    bytestream += len(error_bytestream).to_bytes(4, 'little')
+    bytestream += bytes(error_bytestream)
+    bytestream += len(residual_bytestream).to_bytes(4, 'little')
+    bytestream += bytes(residual_bytestream)
+    f.write(bytestream)
+    bytelen = len(bytestream)
+    print(f'\tBytestream: {naturalsize(bytelen)}.')
 
-    print(f'\tTotal len: {metalen+bytestreamlen}\n')
+    print(f'\tTotal len: {naturalsize(metalen+bytelen)}.\n')
 
     f.close()
 

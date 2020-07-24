@@ -68,6 +68,8 @@ pre_group.add_argument('--feature-file', type=str, dest='feature_file',
     required=False)
 pre_group.add_argument('--label-file', type=str, dest='label_file',
     required=False)
+pre_group.add_argument('--predictor-file', type=str, dest='predictor_file',
+    required=False)
 
 comp_group = parser.add_argument_group('compressor')
 comp_group.add_argument('--comp', type=str, choices=['knn-mst', 'predictive'],
@@ -80,6 +82,12 @@ comp_group.add_argument('--minkp', type=int,
 comp_group.add_argument('--enc', type=str,
     choices=['delta-coo', 'delta-huff', 'video', 'pred-huff', 'pred-golomb'],
     help='encoder to use', dest='enc', default='delta-huff')
+comp_group.add_argument('--error-k', type=int,
+    help='golomb paramater for error string', dest='error_k',
+    default=8)
+comp_group.add_argument('--residual-k', type=int,
+    help='golomb paramater for error string', dest='residual_k',
+    default=32)
 
 video_enc_group = parser.add_argument_group('video encoding')
 valid_intermediate_frame_codecs = ['jpg', 'png']

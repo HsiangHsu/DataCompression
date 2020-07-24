@@ -1,3 +1,4 @@
+from sklearn import linear_model
 '''
 utilities.py
 
@@ -6,6 +7,7 @@ This module includes various helper functions used by various modules
 
 from math import ceil, log2
 import numpy as np
+from sklearn import linear_model
 
 
 def valid_pixels_from_context_strategy(img_shape, relative_indices, no_input_check=False):
@@ -14,10 +16,10 @@ def valid_pixels_from_context_strategy(img_shape, relative_indices, no_input_che
     image of dimension |img_shape| that can be sequentially decoded
     in a linear scan pattern given sufficient initial context.
 
-    If |no_input_check|, we assume usage involves scan patterns or context that is "ahead of"  
+    If |no_input_check|, we assume usage involves scan patterns or context that is "ahead of"
     (either to the right or below) a current pixel, which is possible for previous images
     that have been fully decoded.
-    
+
     Otherwise we require relative context indices to be negative-valued in the row or zero in the
     current row but negative in the column.
     '''
@@ -63,7 +65,7 @@ def get_valid_pixels_for_predictions(img_shape, current_context_indices,
     min_x_cur, max_x_cur, min_y_cur, max_y_cur = valid_pixels_from_context_strategy(
                                                     img_shape, current_context_indices)
     min_x_prev, max_x_prev, min_y_prev, max_y_prev = valid_pixels_from_context_strategy(
-                                                        img_shape, prev_context_indices, 
+                                                        img_shape, prev_context_indices,
                                                         no_input_check=True)
     min_x = max(min_x_cur, min_x_prev)
     max_x = min(max_x_cur, max_x_prev)
@@ -83,7 +85,7 @@ def name_to_context_pixels(name):
         return [(0, -1), (-1, -1), (-1, 0)]
     if name == 'DABC':
         return [(0, -1), (-1, -1), (-1, 0), (-1, 1)]
-    if name == 'DABX':  
+    if name == 'DABX':
         return [(0, -1), (-1, -1), (-1, 0), (0, 0)]
     return None
 
@@ -149,3 +151,77 @@ def readint(f, n):
     '''
 
     return int.from_bytes(f.read(n), byteorder='little')
+
+
+def encode_predictor(clf):
+    stream = b''
+    pred_name = str(clf[0]).split('(')[0]
+    stream += len(pred_name).to_bytes(1, 'little')
+    stream += pred_name.encode()
+
+    for pred in clf:
+        b_coef = pred.coef_.tobytes()
+        stream += len(b_coef).to_bytes(4, 'little')
+        stream += b_coef
+        stream += write_shape(pred.coef_.shape)
+
+        b_intercept = pred.intercept_.tobytes()
+        stream += len(b_intercept).to_bytes(2, 'little')
+        stream += b_intercept
+        stream += write_shape(pred.intercept_.shape)
+
+        if pred_name == 'SGDClassifier':
+            b_classes = pred.classes_.tobytes()
+            stream += len(b_classes).to_bytes(2, 'little')
+            stream += b_classes
+
+    return stream
+
+
+def decode_predictor(f, n_pred):
+    predictors = {'LinearRegression':linear_model.LinearRegression,
+        'SGDClassifier':linear_model.SGDClassifier}
+
+    len_pred_name = readint(f, 1)
+    pred_name = f.read(len_pred_name).decode()
+
+    clf = [predictors[pred_name]() for i in range(n_pred)]
+    for i in range(len(clf)):
+        len_b_coef = readint(f, 4)
+        b_coef = f.read(len_b_coef)
+        coef_shape = read_shape(f)
+        coef = np.frombuffer(b_coef).reshape(coef_shape)
+
+        len_b_intercept = readint(f, 2)
+        b_intercept = f.read(len_b_intercept)
+        intercept_shape = read_shape(f)
+        intercept = np.frombuffer(b_intercept).reshape(intercept_shape)
+
+        if pred_name == 'SGDClassifier':
+            len_b_classes = readint(f, 2)
+            b_classes = f.read(len_b_classes)
+            classes = np.frombuffer(b_classes, dtype=np.uint8)
+
+        clf[i] = predictors[pred_name]()
+        clf[i].coef_ = coef
+        clf[i].intercept_ = intercept
+        if pred_name == 'SGDClassifier':
+            clf[i].classes_ = classes
+
+    return clf
+
+
+def write_shape(shape):
+    stream = b''
+    stream += len(shape).to_bytes(1, 'little')
+    for i in range(len(shape)):
+        stream += shape[i].to_bytes(4, 'little')
+    return stream
+
+
+def read_shape(f):
+    ndim = readint(f, 1)
+    shape_values = []
+    for i in range(ndim):
+        shape_values.append(readint(f, 4))
+    return tuple(shape_values)

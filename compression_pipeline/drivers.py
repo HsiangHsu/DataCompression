@@ -70,15 +70,23 @@ def preprocess(data, args):
         elif args.ordering == 'random':
             rng = default_rng()
             ordered_data = data[rng.permutation(n_elements)]
+
         if args.feature_file is not None:
-            return train_predictor(args.predictor_family, ordered_data,
-                args.num_prev_imgs, args.prev_context, args.curr_context,
-                args.mode,
-                should_extract_training_pairs=False,
-                training_filenames=(args.feature_file, args.label_file))
+            should_extract = False
+        else:
+            should_extract = True
+        if args.predictor_file is not None:
+            should_train = False
+        else:
+            should_train = True
+
         return train_predictor(args.predictor_family, ordered_data,
             args.num_prev_imgs, args.prev_context, args.curr_context,
-            args.mode)
+            args.mode,
+            should_extract_training_pairs=should_extract,
+            training_filenames=(args.feature_file, args.label_file),
+            should_train=should_train,
+            predictor_filename=args.predictor_file)
 
 
 def compress(data, element_axis, pre_metadata, args):
@@ -149,7 +157,7 @@ def encode(compression, pre_metadata, comp_metadata, original_shape, args):
         pred_huffman_enc(compression, pre_metadata[-3:], comp_metadata,
             original_shape, args)
     elif encoder == 'pred-golomb':
-        pred_golomb_enc(compression, pre_metadata, comp_metadata,
+        pred_golomb_enc(compression, pre_metadata[-3:], comp_metadata,
             original_shape, args)
 
 

@@ -11,9 +11,9 @@ from humanize import naturalsize
 from math import ceil, log2
 import numpy as np
 import pickle
-from sklearn import linear_model
 
-from utilities import readint, rgb_to_int, int_to_rgb
+from utilities import readint, encode_predictor, decode_predictor, \
+    write_shape, read_shape
 
 
 def pred_huffman_enc(compression, pre_metadata, comp_metadata, original_shape,
@@ -22,19 +22,6 @@ def pred_huffman_enc(compression, pre_metadata, comp_metadata, original_shape,
     Huffman encoder
 
     Args:
-        compression: numpy array
-            compressed data to be encoded, of shape
-            (n_layers, n_elements, n_points)
-        metadata:
-            metadata for compression (not necessarily the same metadata
-            that is returned by the loader), of shape
-            (n_layers, n_elements); since this encoder is intended
-            to be used with smart orderings, this will probably be inverse
-            orderings of some sort
-        original_shape: tuple
-            shape of original data
-        args: dict
-            all command line arguments passed to driver_compress.py
 
     Returns:
         None
@@ -58,14 +45,16 @@ def pred_huffman_enc(compression, pre_metadata, comp_metadata, original_shape,
     metastream += n_residuals.to_bytes(4, 'little')
     metastream += ord(error_string.dtype.char).to_bytes(1, 'little')
     metastream += write_shape(original_shape)
-    metastream = encode_predictor(metastream, clf)
+    metastream += encode_predictor(clf)
     metastream += n_prev.to_bytes(1, 'little')
     metastream += len(pcs).to_bytes(1, 'little')
     metastream += pcs.encode()
     metastream += len(ccs).to_bytes(1, 'little')
     metastream += ccs.encode()
 
+    # TODO: FOR TESTING ONLY. REMOVE.
     f = open('comp.out', 'wb')
+    # f = open(f'data/predictive/{args.dataset}_{args.predictor_family}_{args.prev_context}_{args.curr_context}_{args.num_prev_imgs}_comp.out', 'wb')
     metalen = len(metastream)
     print(f'\tMetastream: {naturalsize(metalen)}.')
     f.write(metastream)
@@ -150,7 +139,9 @@ def pred_huffman_enc(compression, pre_metadata, comp_metadata, original_shape,
 
     f.close()
 
+    # TODO
     with open('args.out', 'wb') as f:
+    # with open(f'data/predictive/{args.dataset}_{args.predictor_family}_{args.prev_context}_{args.curr_context}_{args.num_prev_imgs}_args.out', 'wb') as f:
         pickle.dump(args, f)
 
 
@@ -313,73 +304,3 @@ def get_freqs(values):
         except KeyError:
             freqs[val] = 1
     return freqs
-
-def encode_predictor(metastream, clf):
-    pred_name = str(clf[0]).split('(')[0]
-    metastream += len(pred_name).to_bytes(1, 'little')
-    metastream += pred_name.encode()
-
-    for pred in clf:
-        b_coef = pred.coef_.tobytes()
-        metastream += len(b_coef).to_bytes(4, 'little')
-        metastream += b_coef
-        metastream += write_shape(pred.coef_.shape)
-
-        b_intercept = pred.intercept_.tobytes()
-        metastream += len(b_intercept).to_bytes(2, 'little')
-        metastream += b_intercept
-        metastream += write_shape(pred.intercept_.shape)
-
-        if pred_name == 'SGDClassifier':
-            b_classes = pred.classes_.tobytes()
-            metastream += len(b_classes).to_bytes(2, 'little')
-            metastream += b_classes
-
-    return metastream
-
-def decode_predictor(f, n_pred):
-    predictors = {'LinearRegression':linear_model.LinearRegression,
-        'SGDClassifier':linear_model.SGDClassifier}
-
-    len_pred_name = readint(f, 1)
-    pred_name = f.read(len_pred_name).decode()
-
-    clf = [predictors[pred_name]() for i in range(n_pred)]
-    for i in range(len(clf)):
-        len_b_coef = readint(f, 4)
-        b_coef = f.read(len_b_coef)
-        coef_shape = read_shape(f)
-        coef = np.frombuffer(b_coef).reshape(coef_shape)
-
-        len_b_intercept = readint(f, 2)
-        b_intercept = f.read(len_b_intercept)
-        intercept_shape = read_shape(f)
-        intercept = np.frombuffer(b_intercept).reshape(intercept_shape)
-
-        if pred_name == 'SGDClassifier':
-            len_b_classes = readint(f, 2)
-            b_classes = f.read(len_b_classes)
-            classes = np.frombuffer(b_classes, dtype=np.uint8)
-
-        clf[i] = predictors[pred_name]()
-        clf[i].coef_ = coef
-        clf[i].intercept_ = intercept
-        if pred_name == 'SGDClassifier':
-            clf[i].classes_ = classes
-
-    return clf
-
-def write_shape(shape):
-    stream = b''
-    stream += len(shape).to_bytes(1, 'little')
-    for i in range(len(shape)):
-        stream += shape[i].to_bytes(4, 'little')
-    return stream
-
-def read_shape(f):
-    ndim = readint(f, 1)
-    shape_values = []
-    for i in range(ndim):
-        shape_values.append(readint(f, 4))
-    return tuple(shape_values)
-

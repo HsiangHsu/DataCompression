@@ -110,7 +110,8 @@ def __compute_classifier_accuracy(clf, predictor_family, training_context, true_
 
 def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
     prev_context, cur_context, mode,
-    should_extract_training_pairs=True, training_filenames=None):
+    should_extract_training_pairs=True, training_filenames=None,
+    should_train=True, predictor_filename=False):
     '''
     Generalized predictive coding preprocessor
 
@@ -138,6 +139,12 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
             if |should_extract_training_pairs|, the locations of the NumPy
             files from which to load |training_context| and |true_pixels|,
             respectively
+        should_train: boolean (default True)
+            whether to train the predictor from the training context or
+            load from |predictor_filename|
+        predictor_filename: string (default None)
+            if |should_train|, the locations of the Pickle dumps
+            from which to load |clf|
 
     Returns:
         ordered_dataset: numpy array
@@ -171,6 +178,9 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
             mmap_mode='r')
         true_pixels = np.load(training_filenames[1], allow_pickle=True,
             mmap_mode='r')
+        end_extraction = timer()
+        print(f'\tLoaded training pairs in ' + \
+            f'{timedelta(seconds=end_extraction-start)}.')
         # TODO: Validate loaded training context and true pixels to ensure they
         #       match shape, etc. of parameters and data passed in
     else:
@@ -194,21 +204,44 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
         np.save(f'true_pixels_{date_str}', np.array(true_pixels))
 
     start = timer()
-    if predictor_family == 'linear':
-        clf = [linear_model.LinearRegression(n_jobs=-1) for i in range(n_pred)]
-    elif predictor_family == 'logistic':
-        training_context = csr_matrix(training_context)
-        clf = [linear_model.SGDClassifier(loss='log', n_jobs=-1) \
-            for i in range(n_pred)]
-    for i in range(n_pred):
-        clf[i].fit(training_context, true_pixels[i])
-    end_model_fitting = timer()
-    print(f'\tTrained a {predictor_family} model in ' + \
-        f'{timedelta(seconds=end_model_fitting-start)}.')
-    for i in range(n_pred):
-        print('\t\t(Accuracy: %05f)' %  __compute_classifier_accuracy(clf[i],
-            predictor_family, training_context, true_pixels[i]))
-    print()
+    if not should_train:
+        assert predictor_filename is not None, \
+            'Must pass filenames for predictor if not training again.'
+        with open(predictor_filename, 'rb') as f:
+            clf = pickle.load(f)
+        predictors = {'LinearRegression': 'linear',
+            'SGDClassifier': 'logistic'}
+        pred_name = str(clf[0]).split('(')[0]
+        pred_type = predictors[pred_name]
+        end_model_loading = timer()
+        print(f'\tLoaded a {pred_type} model in ' + \
+            f'{timedelta(seconds=end_model_loading-start)}.')
+        for i in range(n_pred):
+            print('\t\t(Accuracy: %05f)' % \
+                __compute_classifier_accuracy(clf[i],
+                pred_type, training_context, true_pixels[i]))
+        print()
+    else:
+        if predictor_family == 'linear':
+            clf = [linear_model.LinearRegression(n_jobs=-1) \
+                for i in range(n_pred)]
+        elif predictor_family == 'logistic':
+            training_context = csr_matrix(training_context)
+            clf = [linear_model.SGDClassifier(loss='log', n_jobs=-1) \
+                for i in range(n_pred)]
+        for i in range(n_pred):
+            clf[i].fit(training_context, true_pixels[i])
+        end_model_fitting = timer()
+        print(f'\tTrained a {predictor_family} model in ' + \
+            f'{timedelta(seconds=end_model_fitting-start)}.')
+        for i in range(n_pred):
+            print('\t\t(Accuracy: %05f)' % \
+                __compute_classifier_accuracy(clf[i],
+                predictor_family, training_context, true_pixels[i]))
+        print()
+
+        with open(f'predictor_{date_str}.out', 'wb') as f:
+            pickle.dump(clf, f)
 
     return ordered_dataset, 0, (clf, training_context, true_pixels,
         num_prev_imgs, prev_context, cur_context)
