@@ -19,9 +19,6 @@ import re
 from utilities import readint, encode_predictor, decode_predictor, \
     write_shape, read_shape
 
-from datetime import timedelta
-from timeit import default_timer as timer
-
 
 def pred_golomb_enc(compression, pre_metadata, original_shape, args):
     '''
@@ -73,8 +70,6 @@ def pred_golomb_enc(compression, pre_metadata, original_shape, args):
     metalen = len(metastream)
     print(f'\tMetastream: {naturalsize(metalen)}.')
     f.write(metastream)
-
-    np.save('err_in', error_string)
 
     # Generate Golomb coded bytestream
     error_shape = error_string.shape
@@ -182,8 +177,6 @@ def pred_golomb_dec(comp_file):
     residuals = np.array(residual_decoded_stream, dtype=dtype).reshape(
         residual_shape)
 
-    np.save('err_out', error_string)
-
     return (error_string, residuals, clf), (n_prev, pcs, ccs), \
         (n_prev, pcs, ccs), original_shape
 
@@ -191,6 +184,7 @@ def pred_golomb_dec(comp_file):
 def golomb_encode(stream, k):
     encoded_stream = ['0'*(val//k)+'1'+minimal_binary_coding(val%k,k)
         for val in stream]
+
     return ''.join(encoded_stream)
 
 

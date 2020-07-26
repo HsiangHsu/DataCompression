@@ -82,7 +82,8 @@ comp_group.add_argument('--metric', type=str,
 comp_group.add_argument('--minkp', type=int,
     help='parameter for Minkowski metric', dest='minkowski_p', default=2)
 comp_group.add_argument('--enc', type=str,
-    choices=['delta-coo', 'delta-huff', 'video', 'pred-huff', 'pred-golomb'],
+    choices=['delta-coo', 'delta-huff', 'video', 'pred-huff', 'pred-golomb',
+    'pred-huff-run'],
     help='encoder to use', dest='enc', default='delta-huff')
 comp_group.add_argument('--error-k', type=int,
     help='golomb paramater for error string', dest='error_k',
@@ -131,17 +132,22 @@ if (args.pre == 'rgb' or args.pre == 'rgb-sqpatch') and \
     (not (args.rgbr and args.rgbc)):
     parser.error('must supply --rgb-r and --rgb-c for rgb')
 
+predictives = ['predictive', 'pred-huff', 'pred-golomb', 'pred-huff-run']
+
 for arg in (args.pre, args.comp, args.enc):
-    if arg in ['predictive', 'pred-huff', 'pred-golomb']:
+    if arg in predictives:
         for arg_2 in (args.pre, args.comp, args.enc):
             try:
-                assert arg_2 in ['predictive', 'pred-huff', 'pred-golomb']
+                assert arg_2 in predictives
             except AssertionError:
                 parser.error('Must use predictive options for all fields')
 if args.num_prev_imgs < 0:
-    parser.error("Must specify non-negative number of previous images for predictive coding")
-if (args.feature_file is None and args.label_file is not None) or (args.feature_file is not None and args.label_file is None):
-    paser.error("Must specify both training feature and label files if not extracting from dataset")
+    parser.error("Must specify non-negative number of " + \
+        "previous images for predictive coding")
+if (args.feature_file is None and args.label_file is not None) \
+    or (args.feature_file is not None and args.label_file is None):
+    paser.error("Must specify both training feature and label " + \
+        "files if not extracting from dataset")
 
 full_start = timer()
 

@@ -11,6 +11,7 @@ from encoders.delta_coo import delta_coo_enc, delta_coo_dec
 from encoders.delta_huffman import delta_huffman_enc, delta_huffman_dec
 from encoders.predictive_huffman import pred_huffman_enc, pred_huffman_dec
 from encoders.predictive_golomb import pred_golomb_enc, pred_golomb_dec
+from encoders.predictive_huff_run import pred_huff_run_enc, pred_huff_run_dec
 from encoders.video import video_enc
 
 from numpy.random import default_rng
@@ -162,6 +163,8 @@ def encode(compression, pre_metadata, comp_metadata, original_shape, args):
         pred_huffman_enc(compression, pre_metadata[-3:], original_shape, args)
     elif encoder == 'pred-golomb':
         pred_golomb_enc(compression, pre_metadata[-3:], original_shape, args)
+    elif encoder == 'pred-huff-run':
+        pred_huff_run_enc(compression, pre_metadata[-3:], original_shape, args)
 
 
 def decode(comp_file, args):
@@ -195,6 +198,8 @@ def decode(comp_file, args):
         return pred_huffman_dec(comp_file)
     elif decoder == 'pred-golomb':
         return pred_golomb_dec(comp_file)
+    elif decoder == 'pred-huff-run':
+        return pred_huff_run_dec(comp_file)
 
 
 def decompress(compression, comp_metadata, original_shape, args):
