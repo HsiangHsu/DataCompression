@@ -49,6 +49,8 @@ def preprocess(data, args):
         return dict_pre(data, args.nc, args.alpha, args.niter, args.bsz)
     elif preprocessor == 'predictive':
         ordered_data =  None
+        print(data.shape)
+        input()
         n_elements = data.shape[0]
         if args.load_state is not None:
             h, m = args.load_state
