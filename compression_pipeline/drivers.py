@@ -62,9 +62,13 @@ def preprocess(data, args):
                     # DOI: 0.1016/S0167-7152(02)00421-2 showed
                     # k = O(log n) usually
                     # gives connectedness in the k-NN.
+                    k_val = alpha * int(log(n_elements))
+                    # User specified a k value and we haven't tried it yet
+                    if args.k and alpha == 1: 
+                        k_val = args.k
                     ordered_data, _, _ = knn_mst_comp(data, element_axis=0,
                         metric='euclidean', minkowski_p=2,
-                        k=alpha * int(log(n_elements)))
+                        k=k_val)
                     break
                 except DisconnectedKNN:
                     alpha *= 10

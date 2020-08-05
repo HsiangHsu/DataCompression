@@ -54,6 +54,8 @@ prev_pixel_context_strategies = pixel_context_strategies + ['DABX']
 pre_group.add_argument('--ordering', type=str, default='random',
     choices=['random', 'mst', 'hamiltonian'],
     help='dataset ordering strategy for predictive coding')
+pre_group.add_argument('--k', type=int, 
+    help='initial value of k to try for the kNN graph')
 pre_group.add_argument('--prev-context', type=str, default='DAB',
     dest='prev_context', choices = prev_pixel_context_strategies,
     help='context pixels for predictive coding prior images')
@@ -125,6 +127,8 @@ if args.gop_strat not in ['default', 'max']:
         parser.error('GoP strategy must be default, max, or an integer')
 if args.framerate < 1:
     parser.error('framerate must be >= 1')
+if args.k and not (args.ordering == 'mst' or args.ordering == 'hamiltonian'):
+    parser.error('must use MST or hamiltonian ordering to specify k argument')
 
 if (args.pre == 'sqpatch' or args.pre == 'rgb-sqpatch') and not args.psz:
     parser.error('must supply --psz for sqpatch')
