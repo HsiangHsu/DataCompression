@@ -81,14 +81,9 @@ def preprocess(data, args):
             rng = default_rng()
             ordered_data = data[rng.permutation(n_elements)]
 
-        if args.feature_file is not None:
-            should_extract = False
-        else:
-            should_extract = True
-        if args.predictor_file is not None:
-            should_train = False
-        else:
-            should_train = True
+        
+        should_extract = (args.feature_file is None)
+        should_train = (args.predictor_file is None)
 
         return train_predictor(args.predictor_family, ordered_data,
             args.num_prev_imgs, args.prev_context, args.curr_context,
