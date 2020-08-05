@@ -10,6 +10,10 @@ from scipy.sparse import csr_matrix
 from datetime import timedelta, datetime
 from timeit import default_timer as timer
 
+import rpy2.robjects as robjects
+import rpy2.robjects.numpy2ri
+from rpy2.robjects.packages import importr
+
 import pickle
 
 from utilities import name_to_context_pixels, predictions_to_pixels, \
@@ -117,7 +121,7 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
 
     Args:
         predictor_family: str
-            one of 'linear', 'logistic' for the regression family to compute
+            one of 'linear', 'logistic', 'cubist' for the regression family to compute
             across training features and labels
         ordered_dataset: numpy array
             data to be preprocessed, of shape (n_elements, n_points)
@@ -161,8 +165,8 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
 
     prev_context_indices = name_to_context_pixels(prev_context)
     current_context_indices = name_to_context_pixels(cur_context)
-    assert predictor_family in ['linear', 'logistic'], \
-        "Only linear and logistic predictors are currently supported"
+    assert predictor_family in ['linear', 'logistic', 'cubist'], \
+        "Only linear, logistic, and cubist predictors are currently supported"
     if mode == 'triple':
         assert ordered_dataset.ndim == 4 and ordered_dataset.shape[-1] == 3, \
             'Invalid data shape for triple mode.'
@@ -206,6 +210,7 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
         np.save(f'true_pixels_{date_str}', np.array(true_pixels))
 
     start = timer()
+    # TODO(cubist): can we save/load?
     if not should_train:
         assert predictor_filename is not None, \
             'Must pass filenames for predictor if not training again.'
@@ -222,18 +227,43 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
         if predictor_family == 'linear':
             clf = [linear_model.LinearRegression(n_jobs=-1) \
                 for i in range(n_pred)]
+            for i in range(n_pred):
+                clf[i].fit(training_context, true_pixels[i])
         elif predictor_family == 'logistic':
             training_context = csr_matrix(training_context)
             clf = [linear_model.SGDClassifier(loss='log', n_jobs=-1) \
                 for i in range(n_pred)]
-        for i in range(n_pred):
-            clf[i].fit(training_context, true_pixels[i])
+            for i in range(n_pred):
+                clf[i].fit(training_context, true_pixels[i])
+        elif predictor_family == 'cubist':
+            rpy2.robjects.numpy2ri.activate()
+            Cubist = importr('Cubist')
+            r = robjects.r
+
+            nr,nc = training_context.shape
+            img_labels = ["(image %d)" % i for i in range(nr)]
+            feature_labels = ["(context %d)" % i for i in range(nc)]
+            Xr = robjects.r.matrix(training_context, nrow=nr, ncol=nc,
+                                   dimnames=[img_labels, feature_labels])
+            robjects.r.assign("training_context", Xr)
+            
+            nr,nc = true_pixels.shape
+            Yr = robjects.r.matrix(true_pixels, nrow=nr, ncol=nc,
+                                   dimnames=[["pixel value"], img_labels])
+            robjects.r.assign("true_pixels", Yr)
+            regr = r['cubist'](x=Xr, y=Yr)
+
+            print(r['summary'](regr))
+
+            rpy2.robjects.numpy2ri.deactivate()
+
         end_model_fitting = timer()
         print(f'\tTrained a {predictor_family} model in ' + \
             f'{timedelta(seconds=end_model_fitting-start)}.')
 
-        with open(f'predictor_{date_str}.out', 'wb') as f:
-            pickle.dump(clf, f)
+        if predictor_family in ['linear', 'logistic']:
+                with open(f'predictor_{date_str}.out', 'wb') as f:
+                        pickle.dump(clf, f)
 
     for i in range(n_pred):
         print('\t\t(Accuracy: %05f)' % \
