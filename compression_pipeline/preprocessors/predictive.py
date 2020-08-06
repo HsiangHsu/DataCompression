@@ -282,7 +282,16 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
             assert len(models['LHS']) == n_pred, \
                     "Cubist model resulted in a different number of rules than specified"
             for i in range(n_pred):
-                    predicate = models['LHS'][i]
+                    predicate = models['LHS'][i].split("&")
+                    for j in range(len(predicate)):
+                        predicate[j] =  re.split("\(`\(context\s+", predicate[j])
+                        predicate[j] = ''.join([p for p in predicate[j] if len(p) > 0])
+                        feature_ind = int(re.findall('[\d]+', predicate[j])[0])
+                        tmp = re.split('`\)', predicate[j])
+                        tmp = ''.join(tmp[1:])
+                        predicate[j] = "x[%i] %s" % (feature_ind, tmp)
+                    predicate = ' and '.join(predicate)
+                    
                     model_str = models['RHS'][i].replace("- (", "+ (-")
                     parsed_model = [c.split("*") for c in re.split("[+]\s", model_str)]
                     intercept = float(parsed_model[0][0].replace(")", "").replace("(", "").strip())
@@ -293,7 +302,7 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
                     lin_model = linear_model.LinearRegression()
                     lin_model.intercept_ = intercept
                     lin_model.coef_ = coefs
-                    clf += (predicate, lin_model)
+                    clf.append((predicate, lin_model))
             rpy2.robjects.numpy2ri.deactivate()
 
         end_model_fitting = timer()
@@ -304,10 +313,10 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
                 with open(f'predictor_{date_str}.out', 'wb') as f:
                         pickle.dump(clf, f)
 
-    for i in range(n_pred):
-        print('\t\t(Accuracy: %05f)' % \
-            __compute_classifier_accuracy(clf[i],
-            predictor_family, training_context, true_pixels[i]))
+                for i in range(n_pred):
+                        print('\t\t(Accuracy: %05f)' % \
+                              __compute_classifier_accuracy(clf[i],
+                                                            predictor_family, training_context, true_pixels[i]))
     print()
 
     return ordered_dataset, 0, (clf, training_context, true_pixels,

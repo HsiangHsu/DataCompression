@@ -13,8 +13,10 @@ def predictive_comp(data, element_axis, predictors, training_context,
     assert training_context is not None
     assert true_pixels is not None
 
-    n_pred = true_pixels.shape[0]
+    n_pred = len(predictors)
     dtype = data.dtype
+
+    in_cubist_mode = n_pred != true_pixels.shape[0]
 
     if true_pixels.ndim == 3:
         # RGB triples
@@ -39,13 +41,26 @@ def predictive_comp(data, element_axis, predictors, training_context,
     remaining_samples_to_predict = true_pixels.shape[1]
     start_index = 0
     while remaining_samples_to_predict > 0:
-        predict_batch_size = min(remaining_samples_to_predict, 1000)
+        predict_batch_size = min(remaining_samples_to_predict, 1 if in_cubist_mode else 1000)
         s = start_index
         e = start_index + predict_batch_size
-        for i in range(n_pred):
-            predictions = predictors[i].predict(training_context[s:e])
-            estimated_pixels = predictions_to_pixels(predictions, dtype)
-            error_string[i][s:e] = true_pixels[i][s:e] - estimated_pixels
+        if in_cubist_mode:
+            assert mode == 'single', "Cubist + triple mode is unimplemented"
+            # TODO actually batch
+            num_predicates_applicable = 0
+            predicted_pixel = 0.0
+            for predicate, model in predictors:
+                if eval(predicate, {'x' : training_context[s]}):
+                    predicted_pixel += model.predict([training_context[s]])
+                    num_predicates_applicable += 1
+            predicted_pixel /= num_predicates_applicable
+            estimated_pixel = predictions_to_pixels(predicted_pixel, dtype)
+            error_string[0][s] = true_pixels[0][s] - estimated_pixel        
+        else:
+            for i in range(n_pred):
+                predictions = predictors[i].predict(training_context[s:e])
+                estimated_pixels = predictions_to_pixels(predictions, dtype)
+                error_string[i][s:e] = true_pixels[i][s:e] - estimated_pixels
         start_index += predict_batch_size
         remaining_samples_to_predict -= predict_batch_size
 
