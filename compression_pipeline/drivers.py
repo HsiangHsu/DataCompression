@@ -85,9 +85,11 @@ def preprocess(data, args):
         should_extract = (args.feature_file is None)
         should_train = (args.predictor_file is None)
 
+        cubist_rules_or_none = None if args.predictor_family != 'cubist' else args.num_cubist_rules
+        
         return train_predictor(args.predictor_family, ordered_data,
             args.num_prev_imgs, args.prev_context, args.curr_context,
-            args.mode,
+            args.mode, cubist_rules_or_none,
             should_extract_training_pairs=should_extract,
             training_filenames=(args.feature_file, args.label_file),
             should_train=should_train,

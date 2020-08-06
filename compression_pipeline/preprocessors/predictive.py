@@ -12,9 +12,12 @@ from timeit import default_timer as timer
 
 import rpy2.robjects as robjects
 import rpy2.robjects.numpy2ri
+import rpy2.robjects.packages as rpackages
 from rpy2.robjects.packages import importr
+from rpy2.robjects.vectors import StrVector
 
 import pickle
+import re
 
 from utilities import name_to_context_pixels, predictions_to_pixels, \
     get_valid_pixels_for_predictions
@@ -113,16 +116,17 @@ def __compute_classifier_accuracy(clf, predictor_family, training_context, true_
 
 
 def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
-    prev_context, cur_context, mode,
-    should_extract_training_pairs=True, training_filenames=None,
-    should_train=True, predictor_filename=False):
+                    prev_context, cur_context, mode, num_cubist_rules,
+                    should_extract_training_pairs=True,
+                    training_filenames=None,
+                    should_train=True, predictor_filename=False):
     '''
     Generalized predictive coding preprocessor
 
     Args:
         predictor_family: str
-            one of 'linear', 'logistic', 'cubist' for the regression family to compute
-            across training features and labels
+            one of 'linear', 'logistic', 'cubist' for the regression family 
+            to compute across training features and labels
         ordered_dataset: numpy array
             data to be preprocessed, of shape (n_elements, n_points)
         num_prev_imgs: int
@@ -136,6 +140,9 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
             for context in the current image
         mode: string
             strategy for setting up predictors, in particular for RGB images
+        num_cubist_rules: int or None
+            for |predictor_family| 'cubist', the maximum number of linear 
+            predictors to subdivide
         should_extract_training_pairs: boolean (default True)
             whether to compute the training context from the dataset or else
             load from |training_pairs_filename|
@@ -167,13 +174,16 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
     current_context_indices = name_to_context_pixels(cur_context)
     assert predictor_family in ['linear', 'logistic', 'cubist'], \
         "Only linear, logistic, and cubist predictors are currently supported"
+    assert num_cubist_rules is None if predictor_family != 'cubist' else True, \
+        "Can only specify |num_cubist_rules| when using the cubist predictor"
     if mode == 'triple':
         assert ordered_dataset.ndim == 4 and ordered_dataset.shape[-1] == 3, \
             'Invalid data shape for triple mode.'
         n_pred = 3
     elif mode == 'single':
         n_pred = 1
-
+    if predictor_family == 'cubist':
+        n_pred *= num_cubist_rules
 
     date_str = f'{datetime.now().hour}_{datetime.now().minute}'
 
