@@ -246,25 +246,54 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
             for i in range(n_pred):
                 clf[i].fit(training_context, true_pixels[i])
         elif predictor_family == 'cubist':
+            clf = []
+            # Required R packages
+            packnames = ('Cubist', 'tidyrules')
+
+            # Selectively install what needs to be install.
+            names_to_install = [x for x in packnames if not rpackages.isinstalled(x)]
+            if len(names_to_install) > 0:
+                    utils = rpackages.importr('utils')
+                    # select a mirror for R packages (first in list)
+                    utils.chooseCRANmirror(ind=1) 
+                    utils.install_packages(StrVector(names_to_install))
+                    
             rpy2.robjects.numpy2ri.activate()
             Cubist = importr('Cubist')
+            tidyRules = importr('tidyrules')
             r = robjects.r
+            # Set maximum number of linear models we want
+            cc = r['cubistControl'](rules=5)
 
-            nr,nc = training_context.shape
+            nr,num_training_features = training_context.shape
             img_labels = ["(image %d)" % i for i in range(nr)]
-            feature_labels = ["(context %d)" % i for i in range(nc)]
-            Xr = robjects.r.matrix(training_context, nrow=nr, ncol=nc,
+            feature_labels = ["(context %d)" % i for i in range(num_training_features)]
+            Xr = r.matrix(training_context, nrow=nr, ncol=num_training_features,
                                    dimnames=[img_labels, feature_labels])
-            robjects.r.assign("training_context", Xr)
+            r.assign("training_context", Xr)
             
             nr,nc = true_pixels.shape
             Yr = robjects.r.matrix(true_pixels, nrow=nr, ncol=nc,
                                    dimnames=[["pixel value"], img_labels])
-            robjects.r.assign("true_pixels", Yr)
-            regr = r['cubist'](x=Xr, y=Yr)
+            r.assign("true_pixels", Yr)
+            regr = r['cubist'](x=Xr, y=Yr, control=cc)
 
-            print(r['summary'](regr))
-
+            models = r['tidyRules'](regr)
+            assert len(models['LHS']) == n_pred, \
+                    "Cubist model resulted in a different number of rules than specified"
+            for i in range(n_pred):
+                    predicate = models['LHS'][i]
+                    model_str = models['RHS'][i].replace("- (", "+ (-")
+                    parsed_model = [c.split("*") for c in re.split("[+]\s", model_str)]
+                    intercept = float(parsed_model[0][0].replace(")", "").replace("(", "").strip())
+                    coefs = np.full((num_training_features,), 0.0)
+                    parsed_model = parsed_model[1:]
+                    for c in parsed_model:
+                            coefs[int(re.findall("\d+", c[1])[0])] = float(c[0].replace(")", "").replace("(", "").strip())
+                    lin_model = linear_model.LinearRegression()
+                    lin_model.intercept_ = intercept
+                    lin_model.coef_ = coefs
+                    clf += (predicate, lin_model)
             rpy2.robjects.numpy2ri.deactivate()
 
         end_model_fitting = timer()
