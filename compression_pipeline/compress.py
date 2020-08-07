@@ -47,13 +47,15 @@ pre_group.add_argument('--bsz', type=int, default=10,
 #   D X E
 #   F G H
 pre_group.add_argument('--predictor-family', type=str, default='linear',
-    dest='predictor_family', choices=['linear', 'logistic'],
+    dest='predictor_family', choices=['linear', 'logistic', 'cubist'],
     help='model class to use for predicting pixels')
 pixel_context_strategies = ['DAB', 'DABC']
 prev_pixel_context_strategies = pixel_context_strategies + ['DABX']
 pre_group.add_argument('--ordering', type=str, default='random',
     choices=['random', 'mst', 'hamiltonian'],
     help='dataset ordering strategy for predictive coding')
+pre_group.add_argument('--k', type=int, 
+    help='initial value of k to try for the kNN graph')
 pre_group.add_argument('--prev-context', type=str, default='DAB',
     dest='prev_context', choices = prev_pixel_context_strategies,
     help='context pixels for predictive coding prior images')
@@ -64,6 +66,7 @@ pre_group.add_argument('--num-prev-imgs', type=int, default=2,
     dest='num_prev_imgs')
 pre_group.add_argument('--mode', type=str, choices=['triple', 'single'],
     default='single')
+pre_group.add_argument('--num-cubist-rules', type=int, default=5)
 pre_group.add_argument('--feature-file', type=str, dest='feature_file',
     required=False)
 pre_group.add_argument('--label-file', type=str, dest='label_file',
@@ -125,13 +128,15 @@ if args.gop_strat not in ['default', 'max']:
         parser.error('GoP strategy must be default, max, or an integer')
 if args.framerate < 1:
     parser.error('framerate must be >= 1')
+if args.k and not (args.ordering == 'mst' or args.ordering == 'hamiltonian'):
+    parser.error('must use MST or hamiltonian ordering to specify k argument')
 
 if (args.pre == 'sqpatch' or args.pre == 'rgb-sqpatch') and not args.psz:
     parser.error('must supply --psz for sqpatch')
 if (args.pre == 'rgb' or args.pre == 'rgb-sqpatch') and \
     (not (args.rgbr and args.rgbc)):
     parser.error('must supply --rgb-r and --rgb-c for rgb')
-
+        
 predictives = ['predictive', 'pred-huff', 'pred-golomb', 'pred-huff-run']
 
 for arg in (args.pre, args.comp, args.enc):

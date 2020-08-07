@@ -70,9 +70,13 @@ def preprocess(data, args):
                     # DOI: 0.1016/S0167-7152(02)00421-2 showed
                     # k = O(log n) usually
                     # gives connectedness in the k-NN.
+                    k_val = alpha * int(log(n_elements))
+                    # User specified a k value and we haven't tried it yet
+                    if args.k and alpha == 1:
+                        k_val = args.k
                     ordered_data, _, _ = knn_mst_comp(data, element_axis=0,
                         metric='euclidean', minkowski_p=2,
-                        k=alpha * int(log(n_elements)))
+                        k=k_val)
                     break
                 except DisconnectedKNN:
                     alpha *= 10
@@ -85,18 +89,16 @@ def preprocess(data, args):
             rng = default_rng()
             ordered_data = data[rng.permutation(n_elements)]
 
-        if args.feature_file is not None:
-            should_extract = False
-        else:
-            should_extract = True
-        if args.predictor_file is not None:
-            should_train = False
-        else:
-            should_train = True
+
+        should_extract = (args.feature_file is None)
+        should_train = (args.predictor_file is None)
+
+        cubist_rules_or_none = None if args.predictor_family != 'cubist' \
+            else args.num_cubist_rules
 
         return train_predictor(args.predictor_family, ordered_data,
             args.num_prev_imgs, args.prev_context, args.curr_context,
-            args.mode,
+            args.mode, cubist_rules_or_none,
             should_extract_training_pairs=should_extract,
             training_filenames=(args.feature_file, args.label_file),
             should_train=should_train,
@@ -234,8 +236,8 @@ def decompress(compression, comp_metadata, original_shape, args):
     if decompressor == 'knn-mst':
         return knn_mst_decomp(compression, comp_metadata, original_shape)
     elif decompressor == 'predictive':
-        return predictive_decomp(*compression, *comp_metadata, args.mode,
-            original_shape)
+        return predictive_decomp(*compression, *comp_metadata, original_shape,
+                                 args.mode, args.predictor_family=='cubist')
 
 
 def postprocess(decomp, pre_metadata, args):

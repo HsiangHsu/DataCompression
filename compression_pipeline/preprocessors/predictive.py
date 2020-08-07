@@ -10,7 +10,14 @@ from scipy.sparse import csr_matrix
 from datetime import timedelta, datetime
 from timeit import default_timer as timer
 
+import rpy2.robjects as robjects
+import rpy2.robjects.numpy2ri
+import rpy2.robjects.packages as rpackages
+from rpy2.robjects.packages import importr
+from rpy2.robjects.vectors import StrVector
+
 import pickle
+import re
 
 from utilities import name_to_context_pixels, predictions_to_pixels, \
     get_valid_pixels_for_predictions
@@ -109,16 +116,17 @@ def __compute_classifier_accuracy(clf, predictor_family, training_context, true_
 
 
 def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
-    prev_context, cur_context, mode,
-    should_extract_training_pairs=True, training_filenames=None,
-    should_train=True, predictor_filename=False):
+                    prev_context, cur_context, mode, num_cubist_rules,
+                    should_extract_training_pairs=True,
+                    training_filenames=None,
+                    should_train=True, predictor_filename=False):
     '''
     Generalized predictive coding preprocessor
 
     Args:
         predictor_family: str
-            one of 'linear', 'logistic' for the regression family to compute
-            across training features and labels
+            one of 'linear', 'logistic', 'cubist' for the regression family 
+            to compute across training features and labels
         ordered_dataset: numpy array
             data to be preprocessed, of shape (n_elements, n_points)
         num_prev_imgs: int
@@ -132,6 +140,9 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
             for context in the current image
         mode: string
             strategy for setting up predictors, in particular for RGB images
+        num_cubist_rules: int or None
+            for |predictor_family| 'cubist', the maximum number of linear 
+            predictors to subdivide
         should_extract_training_pairs: boolean (default True)
             whether to compute the training context from the dataset or else
             load from |training_pairs_filename|
@@ -161,15 +172,18 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
 
     prev_context_indices = name_to_context_pixels(prev_context)
     current_context_indices = name_to_context_pixels(cur_context)
-    assert predictor_family in ['linear', 'logistic'], \
-        "Only linear and logistic predictors are currently supported"
+    assert predictor_family in ['linear', 'logistic', 'cubist'], \
+        "Only linear, logistic, and cubist predictors are currently supported"
+    assert num_cubist_rules is None if predictor_family != 'cubist' else True, \
+        "Can only specify |num_cubist_rules| when using the cubist predictor"
     if mode == 'triple':
         assert ordered_dataset.ndim == 4 and ordered_dataset.shape[-1] == 3, \
             'Invalid data shape for triple mode.'
         n_pred = 3
     elif mode == 'single':
         n_pred = 1
-
+    if predictor_family == 'cubist':
+        n_pred *= num_cubist_rules
 
     date_str = f'{datetime.now().hour}_{datetime.now().minute}'
 
@@ -206,6 +220,7 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
         np.save(f'true_pixels_{date_str}', np.array(true_pixels))
 
     start = timer()
+    # TODO(cubist): can we save/load?
     if not should_train:
         assert predictor_filename is not None, \
             'Must pass filenames for predictor if not training again.'
@@ -222,23 +237,85 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
         if predictor_family == 'linear':
             clf = [linear_model.LinearRegression(n_jobs=-1) \
                 for i in range(n_pred)]
+            for i in range(n_pred):
+                clf[i].fit(training_context, true_pixels[i])
         elif predictor_family == 'logistic':
             training_context = csr_matrix(training_context)
             clf = [linear_model.SGDClassifier(loss='log', n_jobs=-1) \
                 for i in range(n_pred)]
-        for i in range(n_pred):
-            clf[i].fit(training_context, true_pixels[i])
+            for i in range(n_pred):
+                clf[i].fit(training_context, true_pixels[i])
+        elif predictor_family == 'cubist':
+            clf = []
+            # Required R packages
+            packnames = ('Cubist', 'tidyrules')
+            utils = importr('utils')
+            # Selectively install what needs to be install.
+            names_to_install = [x for x in packnames if not rpackages.isinstalled(x)]
+            if len(names_to_install) > 0:
+                    # select a mirror for R packages (first in list)
+                    utils.chooseCRANmirror(ind=1) 
+                    utils.install_packages(StrVector(names_to_install))
+
+            rpy2.robjects.numpy2ri.activate()
+            Cubist = importr('Cubist')
+            tidyRules = importr('tidyrules')
+            r = robjects.r
+            # Set maximum number of linear models we want
+            cc = r['cubistControl'](rules=5)
+
+            nr,num_training_features = training_context.shape
+            img_labels = ["(image %d)" % i for i in range(nr)]
+            feature_labels = ["(context %d)" % i for i in range(num_training_features)]
+            Xr = r.matrix(training_context, nrow=nr, ncol=num_training_features,
+                                   dimnames=[img_labels, feature_labels])
+            r.assign("training_context", Xr)
+            
+            nr,nc = true_pixels.shape
+            Yr = robjects.r.matrix(true_pixels, nrow=nr, ncol=nc,
+                                   dimnames=[["pixel value"], img_labels])
+            r.assign("true_pixels", Yr)
+            regr = r['cubist'](x=Xr, y=Yr, control=cc)
+
+            models = r['tidyRules'](regr)
+            assert len(models['LHS']) == n_pred, \
+                    "Cubist model resulted in a different number of rules than specified"
+            for i in range(n_pred):
+                    predicate = models['LHS'][i].split("&")
+                    for j in range(len(predicate)):
+                        predicate[j] =  re.split("\(`\(context\s+", predicate[j])
+                        predicate[j] = ''.join([p for p in predicate[j] if len(p) > 0])
+                        feature_ind = int(re.findall('[\d]+', predicate[j])[0])
+                        tmp = re.split('`\)', predicate[j])
+                        tmp = ''.join(tmp[1:])
+                        predicate[j] = "x[%i] %s" % (feature_ind, tmp)
+                    predicate = ' and '.join(predicate)
+                    
+                    model_str = models['RHS'][i].replace("- (", "+ (-")
+                    parsed_model = [c.split("*") for c in re.split("[+]\s", model_str)]
+                    intercept = float(parsed_model[0][0].replace(")", "").replace("(", "").strip())
+                    coefs = np.full((num_training_features,), 0.0)
+                    parsed_model = parsed_model[1:]
+                    for c in parsed_model:
+                            coefs[int(re.findall("\d+", c[1])[0])] = float(c[0].replace(")", "").replace("(", "").strip())
+                    lin_model = linear_model.LinearRegression()
+                    lin_model.intercept_ = np.float64(intercept)
+                    lin_model.coef_ = np.array(coefs)
+                    clf.append((predicate, lin_model))
+            rpy2.robjects.numpy2ri.deactivate()
+
         end_model_fitting = timer()
         print(f'\tTrained a {predictor_family} model in ' + \
             f'{timedelta(seconds=end_model_fitting-start)}.')
 
-        with open(f'predictor_{date_str}.out', 'wb') as f:
-            pickle.dump(clf, f)
+        if predictor_family in ['linear', 'logistic']:
+                with open(f'predictor_{date_str}.out', 'wb') as f:
+                        pickle.dump(clf, f)
 
-    for i in range(n_pred):
-        print('\t\t(Accuracy: %05f)' % \
-            __compute_classifier_accuracy(clf[i],
-            predictor_family, training_context, true_pixels[i]))
+                for i in range(n_pred):
+                        print('\t\t(Accuracy: %05f)' % \
+                              __compute_classifier_accuracy(clf[i],
+                                                            predictor_family, training_context, true_pixels[i]))
     print()
 
     return ordered_dataset, 0, (clf, training_context, true_pixels,

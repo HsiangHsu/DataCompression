@@ -44,6 +44,7 @@ def pred_huffman_enc(compression, pre_metadata, original_shape, args):
     # Unpack arguments
     error_string, residuals, clf = compression
     n_clf = len(clf)
+    is_cubist_mode = args.predictor_family == 'cubist'
     n_errors = error_string.shape[0]
     n_residuals = residuals.shape[0]
     n_prev = pre_metadata[0]
@@ -58,7 +59,15 @@ def pred_huffman_enc(compression, pre_metadata, original_shape, args):
     metastream += n_residuals.to_bytes(4, 'little')
     metastream += ord(error_string.dtype.char).to_bytes(1, 'little')
     metastream += write_shape(original_shape)
-    metastream += encode_predictor(clf)
+    metastream += is_cubist_mode.to_bytes(1, 'little')
+    if is_cubist_mode:
+        # Encode predicates (one for each predictor)
+        for c in clf:
+            metastream += len(c[0]).to_bytes(1, 'little')
+            metastream += c[0].encode()
+        metastream += encode_predictor([c[1] for c in clf])
+    else:
+        metastream += encode_predictor(clf)
     metastream += n_prev.to_bytes(1, 'little')
     metastream += len(pcs).to_bytes(1, 'little')
     metastream += pcs.encode()
@@ -199,7 +208,17 @@ def pred_huffman_dec(comp_file):
     dtype = np.dtype(chr(readint(f, 1)))
     dsize = dtype.itemsize
     original_shape = read_shape(f)
-    clf = decode_predictor(f, n_pred)
+    is_cubist_mode = readint(f, 1)
+    if is_cubist_mode:
+        clf = []
+        for i in range(n_pred):
+            predicate_len = readint(f, 1)
+            clf.append((f.read(predicate_len).decode(), None))
+        predictors  = decode_predictor(f, n_pred)
+        for i in range(n_pred):
+            clf[i] = (clf[i][0], predictors[i])
+    else:
+        clf = decode_predictor(f, n_pred)
     n_prev = readint(f, 1)
     len_pcs = readint(f, 1)
     pcs = f.read(len_pcs).decode()
