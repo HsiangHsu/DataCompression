@@ -99,7 +99,7 @@ def predictive_comp(data, element_axis, predictors, training_context,
 
 
 def predictive_decomp(error_string, residuals, predictors, n_prev, pcs, ccs,
-    original_shape, mode):
+                      original_shape, mode, is_cubist_mode):
 
     dtype = error_string.dtype
     data = np.empty(original_shape, dtype=dtype)
@@ -111,7 +111,6 @@ def predictive_decomp(error_string, residuals, predictors, n_prev, pcs, ccs,
     # Add 1 because these are used for iteration, not slicing
     r_end += 1
     c_end += 1
-
     if error_string.ndim == 3:
         # RGB triples
         to_reshape = (1, original_shape[0]-n_prev, r_end-r_start, \
@@ -138,16 +137,29 @@ def predictive_decomp(error_string, residuals, predictors, n_prev, pcs, ccs,
         # Run predictor over remaining pixels
         for r in range(r_start, r_end):
             for c in range(c_start, c_end):
-                for i in range(len(predictors)):
-                    context = get_context(data, n_prev, pcs, ccs, n, r, c)
-                    prediction = predictors[i].predict(context)
+                context = get_context(data, n_prev, pcs, ccs, n, r, c)
+                if is_cubist_mode:
+                    num_predicates_applicable = 0
+                    prediction = 0.0
+                    for predicate, model in predictors:
+                        context = context.flatten()
+                        if eval(predicate, {'x' : context}):
+                            prediction += model.predict([context])
+                            num_predicates_applicable += 1
+                    prediction /= num_predicates_applicable
                     prediction = predictions_to_pixels(prediction, dtype)
-                    if mode == 'triple':
-                        data[n,r,c,i] = prediction + errors[i, n-n_prev,
-                            r-r_start, c-c_start]
-                    elif mode == 'single':
-                        data[n,r,c] = prediction + errors[i, n-n_prev,
-                            r-r_start, c-c_start]
+                    assert mode == 'single', "Cubist + triple mode not implemented"
+                    data[n,r,c] = prediction + errors[0, n-n_prev, r-r_start, c-c_start]
+                else:
+                    for i in range(len(predictors)):
+                        prediction = predictors[i].predict(context)
+                        prediction = predictions_to_pixels(prediction, dtype)
+                        if mode == 'triple':
+                            data[n,r,c,i] = prediction + errors[i, n-n_prev,
+                                                                r-r_start, c-c_start]
+                        elif mode == 'single':
+                            data[n,r,c] = prediction + errors[i, n-n_prev,
+                                                              r-r_start, c-c_start]
 
     assert len(residuals) == 0, \
         f'Not all residuals were consumed: {len(residuals)} pixels leftover.'

@@ -249,15 +249,14 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
             clf = []
             # Required R packages
             packnames = ('Cubist', 'tidyrules')
-
+            utils = importr('utils')
             # Selectively install what needs to be install.
             names_to_install = [x for x in packnames if not rpackages.isinstalled(x)]
             if len(names_to_install) > 0:
-                    utils = rpackages.importr('utils')
                     # select a mirror for R packages (first in list)
                     utils.chooseCRANmirror(ind=1) 
                     utils.install_packages(StrVector(names_to_install))
-                    
+
             rpy2.robjects.numpy2ri.activate()
             Cubist = importr('Cubist')
             tidyRules = importr('tidyrules')
@@ -300,8 +299,8 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
                     for c in parsed_model:
                             coefs[int(re.findall("\d+", c[1])[0])] = float(c[0].replace(")", "").replace("(", "").strip())
                     lin_model = linear_model.LinearRegression()
-                    lin_model.intercept_ = intercept
-                    lin_model.coef_ = coefs
+                    lin_model.intercept_ = np.float64(intercept)
+                    lin_model.coef_ = np.array(coefs)
                     clf.append((predicate, lin_model))
             rpy2.robjects.numpy2ri.deactivate()
 
