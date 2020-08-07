@@ -4,25 +4,27 @@ encoders/predictive_huffman.py
 This module contains the Huffman encoder for use with predictive coding.
 '''
 
-from bitstring import BitArray
 from copy import deepcopy
-from heapq import heappush, heappop, heapify
 from humanize import naturalsize
 from math import ceil, log2
 import numpy as np
 import pickle
 
 from utilities import readint, encode_predictor, decode_predictor, \
-    write_shape, read_shape
+    write_shape, read_shape, get_freqs, huffman_encode, huffman_decode
 
 
 def pred_huffman_enc(compression, pre_metadata, original_shape, args):
     '''
-    Huffman encoder for predictive coding.
+    Predictive Huffman Encoder
+
+    Encoder for the predictive coding compressor that encodes both the error
+    string and residuals using Huffman codes, one for the error string and one
+    for the residuals.
 
     Args:
     compression: (numpy array, numpy array, list)
-        compression as returned by the predictive preprocessor, with an
+        compression as returned by the predictive preprocessor, a tuple of an
         error string, a residual string, and a list of predictors
     pre_metadata: (int, string, string)
         metadata as returned by the predictive preprocessor, with the number of
@@ -37,6 +39,9 @@ def pred_huffman_enc(compression, pre_metadata, original_shape, args):
         None
     '''
 
+    f = open('comp.out', 'wb')
+
+    # Unpack arguments
     error_string, residuals, clf = compression
     n_clf = len(clf)
     n_errors = error_string.shape[0]
@@ -45,11 +50,9 @@ def pred_huffman_enc(compression, pre_metadata, original_shape, args):
     pcs = pre_metadata[1]
     ccs = pre_metadata[2]
 
-    # Bytestreams to be built and written
+    # metastream contains data necessary for the decoder to recreate
+    # objects such as numpy arrays and sklearn models
     metastream = b''
-
-    # Metadata needed to reconstruct arrays: shape and dtype.
-    # 4 bytes are used to be fit a reasonably wide range of values
     metastream += n_clf.to_bytes(1, 'little')
     metastream += n_errors.to_bytes(4, 'little')
     metastream += n_residuals.to_bytes(4, 'little')
@@ -61,19 +64,17 @@ def pred_huffman_enc(compression, pre_metadata, original_shape, args):
     metastream += pcs.encode()
     metastream += len(ccs).to_bytes(1, 'little')
     metastream += ccs.encode()
-
-    f = open('comp.out', 'wb')
-    # f = open(f'data/predictive/{args.dataset}_{args.predictor_family}_{args.prev_context}_{args.curr_context}_{args.num_prev_imgs}_comp.out', 'wb')
-    metalen = len(metastream)
-    print(f'\tMetastream: {naturalsize(metalen)}.')
     f.write(metastream)
 
-    error_shape = error_string.shape
-    error_string = error_string.flatten()
-    residual_shape = residuals.shape
-    residuals = residuals.flatten()
+    metalen = len(metastream)
+    print(f'\tMetastream: {naturalsize(metalen)}.')
 
     # Generate Huffman code for error string
+    # n_error_symbols: number of symbols in codebook
+    # symbol_len: bytes needed for uncoded symbol
+    # error_code_len: bytes needed for coded symbol
+    error_shape = error_string.shape
+    error_string = error_string.flatten()
     freqs = get_freqs(error_string)
     raw_code = huffman_encode(freqs)
     n_error_symbols = len(raw_code)
@@ -81,24 +82,31 @@ def pred_huffman_enc(compression, pre_metadata, original_shape, args):
     symbol_len = error_string.dtype.itemsize
     max_code_len = len(max(raw_code, key=lambda c: len(c[1]))[1])
     error_code_len = ceil(max_code_len/8)
+
+    # Write the codebook for the error string
     error_codestream = b''
     for symbol in raw_code:
         error_codestream += int(symbol[0]).to_bytes(symbol_len, 'little')
         error_codestream += len(symbol[1]).to_bytes(error_code_len, 'little')
 
     # Generate Huffman code for residuals
+    residual_shape = residuals.shape
+    residuals = residuals.flatten()
     freqs = get_freqs(residuals)
     raw_code = huffman_encode(freqs)
     n_residual_symbols = len(raw_code)
     residual_code = dict(raw_code)
     max_code_len = len(max(raw_code, key=lambda c: len(c[1]))[1])
     residual_code_len = ceil(max_code_len/8)
+
+    # Write the codebook for the residuals
     residual_codestream = b''
     for symbol in raw_code:
         residual_codestream += int(symbol[0]).to_bytes(symbol_len, 'little')
         residual_codestream += len(symbol[1]).to_bytes(residual_code_len,
             'little')
 
+    # codestream contains the data for reconstructing the Huffman codebooks
     codestream = b''
     codestream += write_shape(error_shape)
     codestream += write_shape(residual_shape)
@@ -110,11 +118,14 @@ def pred_huffman_enc(compression, pre_metadata, original_shape, args):
     codestream += error_codestream
     codestream += residual_codestream
     f.write(codestream)
+
     codelen = len(codestream)
     print(f'\tCodestream: {naturalsize(codelen)}, ' + \
         f'{n_error_symbols} / {n_residual_symbols} symbols.')
 
-    # Generate Huffman coded bitstream
+    # error_bitstream is the Huffman encoding of the error string
+    # error_bitstream is a string of 0s and 1s
+    # error_bytestream is a padded bytestring that can be written to a file
     error_bitstream = ''
     for error in error_string:
         error_bitstream += error_code[error]
@@ -124,6 +135,7 @@ def pred_huffman_enc(compression, pre_metadata, original_shape, args):
     error_bytestream = [int(error_bitstream[8*j:8*(j+1)], 2)
         for j in range(len(error_bitstream)//8)]
 
+    # residual_bitstream is the Huffman encoding of the residuals
     residual_bitstream = ''
     for residual in residuals:
         residual_bitstream += residual_code[residual]
@@ -133,6 +145,8 @@ def pred_huffman_enc(compression, pre_metadata, original_shape, args):
     residual_bytestream = [int(residual_bitstream[8*j:8*(j+1)], 2)
         for j in range(len(residual_bitstream)//8)]
 
+    # bytestream contains the actual encodings and is the largest component
+    # of the final compression size
     bytestream = b''
     bytestream += error_padding.to_bytes(1, 'little')
     bytestream += residual_padding.to_bytes(1, 'little')
@@ -141,6 +155,7 @@ def pred_huffman_enc(compression, pre_metadata, original_shape, args):
     bytestream += len(residual_bytestream).to_bytes(4, 'little')
     bytestream += bytes(residual_bytestream)
     f.write(bytestream)
+
     bytelen = len(bytestream)
     print(f'\tBytestream: {naturalsize(bytelen)}.')
 
@@ -149,13 +164,12 @@ def pred_huffman_enc(compression, pre_metadata, original_shape, args):
     f.close()
 
     with open('args.out', 'wb') as f:
-    # with open(f'data/predictive/{args.dataset}_{args.predictor_family}_{args.prev_context}_{args.curr_context}_{args.num_prev_imgs}_args.out', 'wb') as f:
         pickle.dump(args, f)
 
 
 def pred_huffman_dec(comp_file):
     '''
-    Delta Vector and Huffman Encoding Decoder
+    Predictive Huffman Decoder
 
     See docstring on the corresponding encoder for more information.
 
@@ -169,14 +183,16 @@ def pred_huffman_dec(comp_file):
         pre_metadata: numpy array
             metadata for preprocessing
         comp_metadata: numpy array
-            metadata for compression
+            metadata for compression; no extra compression metadata is needed
+            for the predictive Huffman strategy, so this is the same as
+            pre_metadata
         original_shape: tuple
             shape of original data
     '''
 
     f = open(comp_file, 'rb')
 
-    # Read in sizing and and datatype metadata to reconstruct arrays.
+    # Read in metastream and reconstruct some objects
     n_pred = readint(f, 1)
     n_errors = readint(f, 4)
     n_residuals = readint(f, 4)
@@ -190,7 +206,7 @@ def pred_huffman_dec(comp_file):
     len_ccs = readint(f, 1)
     ccs = f.read(len_ccs).decode()
 
-    # Reconstruct Huffman code
+    # Read in metadata from codestream to begin to reconstruct codebooks
     error_shape = read_shape(f)
     residual_shape = read_shape(f)
     symbol_len = readint(f, 1)
@@ -199,14 +215,15 @@ def pred_huffman_dec(comp_file):
     error_codestream_len = readint(f, 4)
     residual_codestream_len = readint(f, 4)
 
-    # Error codestream
+    # Reconstruct the Huffman codebook for the error string
+    # error_code is the final codebook
     codebytes_read = 0
     raw_code = []
     while codebytes_read < error_codestream_len:
         raw_code.append([readint(f, symbol_len), readint(f, error_code_len)])
         codebytes_read += symbol_len + error_code_len
     error_code = deepcopy(raw_code)
-    codelen = raw_code[0][1]
+    codelen = rawing_code[0][1]
     code = f'{0:0{codelen}b}'
     error_code[0][1] = code
     for k in range(1, len(raw_code)):
@@ -216,7 +233,7 @@ def pred_huffman_dec(comp_file):
         code = f'{code:0{codelen}b}'
         error_code[k][1] = code
 
-    # Residual codestream
+    # Reconstruct the Huffman codebook for the residuals
     codebytes_read = 0
     raw_code = []
     while codebytes_read < residual_codestream_len:
@@ -234,6 +251,7 @@ def pred_huffman_dec(comp_file):
         code = f'{code:0{codelen}b}'
         residual_code[k][1] = code
 
+    # Read in metadata from bytestream to begin to decode
     error_padding_bits = readint(f, 1)
     residual_padding_bits = readint(f, 1)
     error_bytestream_len = readint(f, 4)
@@ -246,69 +264,19 @@ def pred_huffman_dec(comp_file):
     error_string = np.empty((n_errors,), dtype=dtype)
     residuals = np.empty((n_residuals,), dtype=dtype)
 
+    # Reverse codebook for decoding
     error_decodings = {v: k for k, v in dict(error_code).items()}
     residual_decodings = {v: k for k, v in dict(residual_code).items()}
+
+    # Decode error_bytestream and residual_bytestream
     error_decoded_stream = huffman_decode(error_bytestream,
         error_bitstream_len, error_decodings)
     residual_decoded_stream = huffman_decode(residual_bytestream,
         residual_bitstream_len, residual_decodings)
-
     error_string = np.array(error_decoded_stream, dtype=dtype).reshape(
         error_shape)
     residuals = np.array(residual_decoded_stream, dtype=dtype).reshape(
         residual_shape)
 
-    return (error_string, residuals, clf), None, (n_prev, pcs, ccs), \
-        original_shape
-
-
-def huffman_encode(symb2freq):
-    heap = [[wt, [sym, ""]] for sym, wt in symb2freq.items()]
-    heapify(heap)
-    while len(heap) > 1:
-        lo = heappop(heap)
-        hi = heappop(heap)
-        for pair in lo[1:]:
-            pair[1] = '0' + pair[1]
-        for pair in hi[1:]:
-            pair[1] = '1' + pair[1]
-        heappush(heap, [lo[0] + hi[0]] + lo[1:] + hi[1:])
-    non_canonical = sorted(heappop(heap)[1:], key=lambda p: (len(p[-1]), p))
-
-    canonical = deepcopy(non_canonical)
-    codelen = len(non_canonical[0][1])
-    code = f'{0:0{codelen}b}'
-    canonical[0][1] = code
-    for i in range(1, len(non_canonical)):
-        codelen = len(non_canonical[i][1])
-        code = int(code, 2) + 1
-        code = code << (codelen - len(non_canonical[i-1][1]))
-        code = f'{code:0{codelen}b}'
-        canonical[i][1] = code
-
-    return canonical
-
-
-def huffman_decode(bytestream, length, decodings):
-    bitstream_array = BitArray(bytestream).bin
-    decoded_stream = list()
-    index = 0
-    while (index < length):
-        possible_encoding = bitstream_array[index]
-        possible_end_index = index + 1
-        while (possible_encoding not in decodings):
-            possible_end_index += 1
-            possible_encoding = bitstream_array[index:possible_end_index]
-        decoded_stream.append(decodings[possible_encoding])
-        index = possible_end_index
-    return decoded_stream
-
-
-def get_freqs(values):
-    freqs = dict()
-    for val in values:
-        try:
-            freqs[val] += 1
-        except KeyError:
-            freqs[val] = 1
-    return freqs
+    return (error_string, residuals, clf), (n_prev, pcs, ccs), \
+        (n_prev, pcs, ccs), original_shape

@@ -3,7 +3,7 @@
 '''
 driver_decompress.py
 
-This is the executable used to decompress a dataset.
+This is the executable used to decompress a data set.
 The compressed dataset and the  arguments used for compression
 are passed in as command-line arguments.
 After parsing arguments, the work is delegated to the decompressor module.

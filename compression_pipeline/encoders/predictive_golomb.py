@@ -4,25 +4,23 @@ encoders/predictive_golomb.py
 This module contains the Golomb encoder for use with predictive coding.
 '''
 
-from bitstring import BitArray
 from copy import deepcopy
-from golomb_coding import golomb_coding
-from heapq import heappush, heappop, heapify
 from humanize import naturalsize
-from itertools import tee
 from math import ceil, log2
-from minimal_binary_coding import minimal_binary_coding
 import numpy as np
 import pickle
-import re
 
 from utilities import readint, encode_predictor, decode_predictor, \
-    write_shape, read_shape
+    write_shape, read_shape, golomb_encode, golomb_decode
 
 
 def pred_golomb_enc(compression, pre_metadata, original_shape, args):
     '''
-    Golomb encoder for predictive coding.
+    Predictive Golomb Encoder
+
+    Encoder for the predictive coding compressor that encodes both the error
+    string and residuals using Golomb codes, one for the error string and one
+    for the residuals.
 
     Args:
     compression: (numpy array, numpy array, list)
@@ -41,6 +39,9 @@ def pred_golomb_enc(compression, pre_metadata, original_shape, args):
         None
     '''
 
+    f = open('comp.out', 'wb')
+
+    # Unpack arguments
     error_string, residuals, clf = compression
     n_clf = len(clf)
     n_errors = error_string.shape[0]
@@ -49,11 +50,9 @@ def pred_golomb_enc(compression, pre_metadata, original_shape, args):
     pcs = pre_metadata[1]
     ccs = pre_metadata[2]
 
-    # Bytestreams to be built and written
+    # metastream contains data necessary for the decoder to recreate
+    # objects such as numpy arrays and sklearn models
     metastream = b''
-
-    # Metadata needed to reconstruct arrays: shape and dtype.
-    # 4 bytes are used to be fit a reasonably wide range of values
     metastream += n_clf.to_bytes(1, 'little')
     metastream += n_errors.to_bytes(4, 'little')
     metastream += n_residuals.to_bytes(4, 'little')
@@ -65,18 +64,16 @@ def pred_golomb_enc(compression, pre_metadata, original_shape, args):
     metastream += pcs.encode()
     metastream += len(ccs).to_bytes(1, 'little')
     metastream += ccs.encode()
-
-    f = open('comp.out', 'wb')
-    metalen = len(metastream)
-    print(f'\tMetastream: {naturalsize(metalen)}.')
     f.write(metastream)
 
-    # Generate Golomb coded bytestream
+    metalen = len(metastream)
+    print(f'\tMetastream: {naturalsize(metalen)}.')
+
+    # Generate Golomb code for error string
+    # error_bitstream is a string of 0s and 1s
+    # error_bytestream is a padded bytestring that can be written to a file
     error_shape = error_string.shape
     error_string = error_string.flatten()
-    residual_shape = residuals.shape
-    residuals = residuals.flatten()
-
     error_bitstream = golomb_encode(error_string, args.error_k)
     padded_length = 8*ceil(len(error_bitstream)/8)
     error_padding = padded_length - len(error_bitstream);
@@ -84,6 +81,9 @@ def pred_golomb_enc(compression, pre_metadata, original_shape, args):
     error_bytestream = [int(error_bitstream[8*j:8*(j+1)], 2)
         for j in range(len(error_bitstream)//8)]
 
+    # Generate Golomb code for residuals
+    residual_shape = residuals.shape
+    residuals = residuals.flatten()
     residual_bitstream = golomb_encode(residuals, args.residual_k)
     padded_length = 8*ceil(len(residual_bitstream)/8)
     residual_padding = padded_length - len(residual_bitstream);
@@ -91,6 +91,9 @@ def pred_golomb_enc(compression, pre_metadata, original_shape, args):
     residual_bytestream = [int(residual_bitstream[8*j:8*(j+1)], 2)
         for j in range(len(residual_bitstream)//8)]
 
+    # bytestream contains the actual encodings and the metadata necessary for
+    # the Golomb code; it is the largest component of the final compression
+    # size
     bytestream = b''
     bytestream += write_shape(error_shape)
     bytestream += write_shape(residual_shape)
@@ -103,6 +106,7 @@ def pred_golomb_enc(compression, pre_metadata, original_shape, args):
     bytestream += len(residual_bytestream).to_bytes(4, 'little')
     bytestream += bytes(residual_bytestream)
     f.write(bytestream)
+
     bytelen = len(bytestream)
     print(f'\tBytestream: {naturalsize(bytelen)}.')
 
@@ -116,7 +120,7 @@ def pred_golomb_enc(compression, pre_metadata, original_shape, args):
 
 def pred_golomb_dec(comp_file):
     '''
-    Golomb decoder
+    Predictive Golomb Decoder
 
     See docstring on the corresponding encoder for more information.
 
@@ -130,14 +134,16 @@ def pred_golomb_dec(comp_file):
         pre_metadata: numpy array
             metadata for preprocessing
         comp_metadata: numpy array
-            metadata for compression
+            metadata for compression; no extra compression metadata is needed
+            for the predictive Huffman strategy, so this is the same as
+            pre_metadata
         original_shape: tuple
             shape of original data
     '''
 
     f = open(comp_file, 'rb')
 
-    # Read in sizing and and datatype metadata to reconstruct arrays.
+    # Read in metastream and reconstruct some objects
     n_pred = readint(f, 1)
     n_errors = readint(f, 4)
     n_residuals = readint(f, 4)
@@ -151,6 +157,7 @@ def pred_golomb_dec(comp_file):
     len_ccs = readint(f, 1)
     ccs = f.read(len_ccs).decode()
 
+    # Read in metadata from bytestream to begin to reconstruct codebooks
     error_shape = read_shape(f)
     residual_shape = read_shape(f)
     error_padding_bits = readint(f, 1)
@@ -161,17 +168,17 @@ def pred_golomb_dec(comp_file):
     error_bitstream_len = error_bytestream_len*8 - error_padding_bits
     error_bytestream = f.read(error_bytestream_len)
     residual_bytestream_len = readint(f, 4)
-    residual_bytestream = f.read(residual_bytestream_len)
     residual_bitstream_len = residual_bytestream_len*8 - residual_padding_bits
+    residual_bytestream = f.read(residual_bytestream_len)
 
     error_string = np.empty((n_errors,), dtype=dtype)
     residuals = np.empty((n_residuals,), dtype=dtype)
 
+    # Decode error_bytestream and residual_bytestream
     error_decoded_stream = golomb_decode(error_bytestream, error_bitstream_len,
         error_k)
     residual_decoded_stream = golomb_decode(residual_bytestream,
         residual_bitstream_len, residual_k)
-
     error_string = np.array(error_decoded_stream, dtype=dtype).reshape(
         error_shape)
     residuals = np.array(residual_decoded_stream, dtype=dtype).reshape(
@@ -179,27 +186,3 @@ def pred_golomb_dec(comp_file):
 
     return (error_string, residuals, clf), (n_prev, pcs, ccs), \
         (n_prev, pcs, ccs), original_shape
-
-
-def golomb_encode(stream, k):
-    encoded_stream = ['0'*(val//k)+'1'+minimal_binary_coding(val%k,k)
-        for val in stream]
-
-    return ''.join(encoded_stream)
-
-
-def golomb_decode(bytestream, bitstream_len, k):
-    bitstream = BitArray(bytestream).bin
-    bits_read = 0
-    base = int(log2(k))
-
-    idxs = [m.end() for m in re.finditer(f'1.{{{base}}}', bitstream)]
-    idxs.insert(0, 0)
-    start, end = tee(idxs)
-    next(end, None)
-
-    words = [bitstream[i:j] for i, j in zip(start, end)]
-    parts = [word.partition('1') for word in words]
-    decoded_stream = [(len(u)<<base) + int(b, base=2) for u, _, b in parts]
-
-    return decoded_stream

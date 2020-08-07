@@ -3,7 +3,7 @@
 '''
 driver_compress.py
 
-This is the executable used to compress a dataset.
+This is the executable used to compress a data set.
 All parameters for compression are passed in as command-line arguments.
 After parsing arguments, the work is delegated to the loader,
 preprocessor, and compressor modules.

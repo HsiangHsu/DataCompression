@@ -1,3 +1,10 @@
+'''
+drivers.py
+
+This module contains helper functions for each stage of the compression
+pipeline.
+'''
+
 from preprocessors.sqpatch import sqpatch_pre, sqpatch_post
 from preprocessors.rgb import rgb_pre, rgb_post
 from preprocessors.dict import dict_pre, dict_post
@@ -16,6 +23,7 @@ from encoders.video import video_enc
 
 from numpy.random import default_rng
 from numpy import log
+
 
 def preprocess(data, args):
     '''
@@ -123,7 +131,7 @@ def compress(data, element_axis, pre_metadata, args):
     if compressor == 'knn-mst':
         return knn_mst_comp(data, element_axis, args.metric, args.minkowski_p)
     elif compressor == 'predictive':
-        return predictive_comp(data, element_axis, *pre_metadata, args.mode)
+        return predictive_comp(data, *pre_metadata, args.mode)
 
 
 def encode(compression, pre_metadata, comp_metadata, original_shape, args):
@@ -226,8 +234,8 @@ def decompress(compression, comp_metadata, original_shape, args):
     if decompressor == 'knn-mst':
         return knn_mst_decomp(compression, comp_metadata, original_shape)
     elif decompressor == 'predictive':
-        return predictive_decomp(*compression, *comp_metadata, original_shape,
-            args.mode)
+        return predictive_decomp(*compression, *comp_metadata, args.mode,
+            original_shape)
 
 
 def postprocess(decomp, pre_metadata, args):

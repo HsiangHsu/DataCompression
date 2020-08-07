@@ -2,6 +2,9 @@
 dct.py
 
 This module contains the Discrete Cosine Transform preprocessor.
+
+NB: This module is may not be fully correct or complete. It should be tested
+before being used.
 '''
 
 import numpy as np
@@ -9,7 +12,7 @@ from scipy.fft import dctn, idctn
 
 def dct_pre(data):
     '''
-    DCT preprocessor
+    DCT Preprocessor
 
     2D images are transformed using the Discrete Cosine Transform
 
@@ -44,7 +47,7 @@ def dct_pre(data):
 
 def dct_post(decomp):
     '''
-    DCT preprocessor
+    DCT Postprocessor
 
     See docstring on the corresponding preprocessor for more information
 
@@ -58,4 +61,5 @@ def dct_post(decomp):
             postprocessed data, of shape
             ([n_layers], n_elements, rows, columns)
     '''
+
     return idctn(decomp, axes=[-1,-2], norm='ortho', workers=-1)

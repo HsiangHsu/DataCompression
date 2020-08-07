@@ -9,9 +9,13 @@ import numpy as np
 
 def sqpatch_pre(data, patch_sz):
     '''
-    Square patching preprocessor
+    Square Patching Preprocessor
 
     Square images are cropped into axis-aligned sub-squares.
+
+    NB: I found out after the fact that there is a far simpler way to do this
+    using numpy methods. If this is a useful preprocessor, it's probably worth
+    reimplementing using those methods instead.
 
     Args:
         data: numpy array
@@ -62,7 +66,7 @@ def sqpatch_pre(data, patch_sz):
 
 def sqpatch_post(decomp):
     '''
-    Square patching postprocessor
+    Square Patching Postprocessor
 
     See docstring on the corresponding preprocessor for more information.
 
@@ -106,7 +110,7 @@ def sqpatch_post(decomp):
 
 def square_crop(element, patches_per_side, patch_sz):
     '''
-    Helper function for sqpatch that does the actual cropping
+    Helper function for sqpatch that does the actual cropping.
 
     Args:
         element: numpy array

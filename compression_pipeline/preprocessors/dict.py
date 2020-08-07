@@ -16,7 +16,7 @@ from matplotlib import pyplot as plt
 
 def dict_pre(data, n_components, alpha, n_iter, batch_size):
     '''
-    Dictionary Learning preprocessor
+    Dictionary Learning Preprocessor
 
     Uses Mini-Batch Dictionary Learning to generate a dictionary of atoms to
     sparsely represent the data.
@@ -58,7 +58,7 @@ def dict_pre(data, n_components, alpha, n_iter, batch_size):
 
 def dict_post(decomp, pre_metadata):
     '''
-    RGB reshaping postprocessor
+    Dictionary Learning Postprocessor
 
     See docstring on the corresponding preprocessor for more information
 

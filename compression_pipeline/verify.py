@@ -1,11 +1,14 @@
+#!/usr/bin/env python3
+
 '''
 displayer.py
 
-Short script for verifying that the input and output data are the same dataset,
+Script for verifying that the input and output data are the same data set,
 even if they aren't in the same order.
 '''
 
 import numpy as np
+
 
 data_in = np.load('data_in.npy')
 data_out = np.load('data_out.npy')
