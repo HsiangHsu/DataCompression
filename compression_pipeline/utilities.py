@@ -31,7 +31,7 @@ def valid_pixels_from_context_strategy(img_shape, relative_indices,
     row or zero in the current row but negative in the column.
     '''
 
-    err_msg = "Impossible to satisfy passing initial context with these " +
+    err_msg = "Impossible to satisfy passing initial context with these " + \
         "relative indices %r"
     assert no_input_check or np.all([index[0] < 0 or \
         (index[0] == 0 and index[1] < 0) for index in relative_indices]), \

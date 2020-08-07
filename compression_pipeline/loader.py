@@ -63,7 +63,7 @@ def load(dataset):
         data = idx2numpy.convert_from_file(os.path.join(dirpath, datapath))
         labels = idx2numpy.convert_from_file(
             os.path.join(dirpath, labelpath))
-        return (data[:10], labels)
+        return (data, labels)
 
     elif dataset == 'cifar-10':
         data = np.empty((50000, 3072), dtype=np.uint8)
