@@ -10,6 +10,7 @@ import numpy as np
 import os
 import pandas as pd
 import pickle
+import cv2
 
 
 def load(dataset):
@@ -92,4 +93,15 @@ def load(dataset):
         for col in df:
             df[col] = pd.to_numeric(df[col], downcast='unsigned')
         return (np.ascontiguousarray(df.to_numpy()), None)
+
+    elif dataset == 'utk-face':
+        data = np.empty((23709, 3, 200, 200), dtype=np.uint8)
+        i = 0
+        for imagefile in os.listdir(dirpath):
+            data[i] = cv2.imread(os.path.join(dirpath, imagefile), cv2.IMREAD_COLOR).transpose(2, 0, 1)
+            i += 1
+        # RGB triples
+        input()
+        return (data, None)
+
     assert False, "Could not load specified dataset %s" % dataset
