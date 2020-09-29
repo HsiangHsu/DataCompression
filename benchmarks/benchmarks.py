@@ -8,7 +8,7 @@ import loader
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-d', type=str, help='dataset to benchmark',
-    choices=['test', 'mnist', 'cifar-10', 'synthetic', 'adult'])
+    choices=['test', 'mnist', 'cifar-10', 'synthetic', 'adult', 'utk-face'])
 parser.add_argument('-f', type=str, help='file to benchmark')
 args = parser.parse_args()
 

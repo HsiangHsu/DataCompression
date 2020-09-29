@@ -101,7 +101,6 @@ def load(dataset):
             data[i] = cv2.imread(os.path.join(dirpath, imagefile), cv2.IMREAD_COLOR).transpose(2, 0, 1)
             i += 1
         # RGB triples
-        input()
-        return (data, None)
+        return (data.transpose(0, 2, 3, 1), None)
 
     assert False, "Could not load specified dataset %s" % dataset

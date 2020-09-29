@@ -25,3 +25,8 @@ def get_dataset_path(dataset):
 
     elif dataset == 'adult':
         return [os.path.join(dirpath, 'adult.data')]
+
+    elif dataset == 'utk-face':
+        return [dirpath]
+
+    assert False, "Could not load specified dataset %s" % dataset
