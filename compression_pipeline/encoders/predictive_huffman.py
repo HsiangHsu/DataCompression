@@ -242,7 +242,7 @@ def pred_huffman_dec(comp_file):
         raw_code.append([readint(f, symbol_len), readint(f, error_code_len)])
         codebytes_read += symbol_len + error_code_len
     error_code = deepcopy(raw_code)
-    codelen = rawing_code[0][1]
+    codelen = raw_code[0][1]
     code = f'{0:0{codelen}b}'
     error_code[0][1] = code
     for k in range(1, len(raw_code)):
