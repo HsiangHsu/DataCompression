@@ -89,8 +89,9 @@ def predictive_comp(data, predictors, evaluation_context, true_pixels, n_prev,
     remaining_samples_to_predict = num_pixels_to_predict
     start_index = 0
     imgs_processed = min(data.shape[0], 10)
+    assert imgs_processed > n_prev, "Must start with non-empty reservoir"
     if should_extract_context_on_fly:
-        context_string_reservoir, true_pixel_reservoir = extract_training_pairs(data[n_prev:n_prev+imgs_processed],
+        context_string_reservoir, true_pixel_reservoir = extract_training_pairs(data[0:imgs_processed],
                                                                                 n_prev,
                                                                                 prev_context_indices,
                                                                                 current_context_indices)
@@ -117,18 +118,10 @@ def predictive_comp(data, predictors, evaluation_context, true_pixels, n_prev,
             error_string[0][s] = true_pixels[0][s] - estimated_pixel
         else:
             if should_extract_context_on_fly:
-                print("size of context_string_reservoir", context_string_reservoir.shape)
-                print("size of true_pixel_reservoir", true_pixel_reservoir.shape)
-                print("s=",s,"e=",e)
                 if len(true_pixel_reservoir) < predict_batch_size:
-                    #20 20 1000 376 1000
-                    print(data.shape[0], imgs_processed, predict_batch_size, len(true_pixel_reservoir), predict_batch_size)
                     addl_imgs_to_process = min(data.shape[0] - imgs_processed, 10)
-                    if addl_imgs_to_process == 0:
-                        predict_batch_size = len(true_pixel_reservoir)
-                        break
                     assert addl_imgs_to_process > 0
-                    addl_contexts, addl_true_pixels = extract_training_pairs(data[imgs_processed:imgs_processed+addl_imgs_to_process],
+                    addl_contexts, addl_true_pixels = extract_training_pairs(data[imgs_processed - n_prev:imgs_processed + addl_imgs_to_process],
                                                                              n_prev,
                                                                              prev_context_indices,
                                                                              current_context_indices)
@@ -137,14 +130,11 @@ def predictive_comp(data, predictors, evaluation_context, true_pixels, n_prev,
                     addl_contexts = np.reshape(addl_contexts, (-1,) + evaluation_context.shape[1:])
                     context_string_reservoir = np.vstack((context_string_reservoir, addl_contexts))
                     true_pixel_reservoir = np.vstack((true_pixel_reservoir, np.array(addl_true_pixels)))
-                    print("after adding stuff to reservoir, shape is", true_pixel_reservoir.shape)
-                    print("size of context_string_reservoir", context_string_reservoir.shape)
         for i in range(n_pred):
             if should_extract_context_on_fly:
                 contexts_for_eval = context_string_reservoir[0:predict_batch_size]
                 true_pixels_for_eval = true_pixel_reservoir[i][0:predict_batch_size]
             else:
-                print("taking s",s,"to e",e)
                 contexts_for_eval = evaluation_context[s:e]
                 true_pixels_for_eval = true_pixels[i][s:e]    
                 
@@ -154,12 +144,9 @@ def predictive_comp(data, predictors, evaluation_context, true_pixels, n_prev,
         if should_extract_context_on_fly:
             context_string_reservoir = np.delete(context_string_reservoir, slice(0, predict_batch_size), axis=0)
             true_pixel_reservoir = np.delete(true_pixel_reservoir, slice(0, predict_batch_size), axis=0)
-            print("post-deletion size of context_string_reservoir", context_string_reservoir.shape)
-            print("size of true_pixel_reservoir", true_pixel_reservoir.shape)
 
         start_index += predict_batch_size
         remaining_samples_to_predict -= predict_batch_size
-
     # Build residuals by slicing every image in the data set based on the
     # context strings
     r_start, r_end, c_start, c_end = \
