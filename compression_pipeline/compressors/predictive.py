@@ -6,10 +6,11 @@ compressor.
 '''
 
 import numpy as np
+from preprocessors.predictive import extract_training_pairs
 from utilities import name_to_context_pixels, predictions_to_pixels, \
     get_valid_pixels_for_predictions
 
-def predictive_comp(data, predictors, training_context, true_pixels, n_prev,
+def predictive_comp(data, predictors, evaluation_context, true_pixels, n_prev,
     pcs, ccs, mode):
     '''
     Predictive Coding Compressor
@@ -19,7 +20,7 @@ def predictive_comp(data, predictors, training_context, true_pixels, n_prev,
             data to be compressed
         predictors: list
             list of sklearn predictor models
-        training_context: numpy array
+        evaluation_context: numpy array
             array of contexts used to predict each pixel
         true_pixels: numpy array
             actual value of each pixel
@@ -43,13 +44,21 @@ def predictive_comp(data, predictors, training_context, true_pixels, n_prev,
             shape of original data
     '''
 
-    assert training_context is not None
+    assert evaluation_context is not None
     assert true_pixels is not None
 
     n_pred = len(predictors)
     dtype = data.dtype
     current_context_indices = name_to_context_pixels(ccs)
     prev_context_indices = name_to_context_pixels(pcs)
+
+    pixel_preds = get_valid_pixels_for_predictions(data[0].shape, current_context_indices, prev_context_indices, False)
+    num_pixels_to_predict = (pixel_preds[1] - pixel_preds[0] + 1) * (pixel_preds[3] - pixel_preds[2] + 1) \
+                            * (data.shape[0] - n_prev)
+    print("expecting num_pixels_to_predict = ", num_pixels_to_predict, "and got", true_pixels.shape[1])
+    # If true, it means the predictor was trained on a subset of the original data (for size or
+    # performance reasons), so we must grab the context for each pixel and its value on the fly.
+    should_extract_context_on_fly = (true_pixels.shape[1] != num_pixels_to_predict)
 
     # Based on the dimensions of true_pixels and the value of mode, determine
     # how to shape the residuals for the most convenient computations
@@ -59,45 +68,95 @@ def predictive_comp(data, predictors, training_context, true_pixels, n_prev,
         assert mode == 'single'
         to_reshape = (-1, true_pixels.shape[-1])
         residuals = np.empty((0, true_pixels.shape[-1]), dtype=dtype)
+        error_string_dims = (1, num_pixels_to_predict, 3)
     elif true_pixels.ndim == 2:
         if mode == 'single':
             # Grayscale singles
             to_reshape = (-1,)
             residuals = np.empty((0,), dtype=dtype)
+            error_string_dims = (1, num_pixels_to_predict)
         elif mode == 'triple':
             # RGB singles
             to_reshape = (-1, true_pixels.shape[0])
             residuals = np.empty((0, true_pixels.shape[0]), dtype=dtype)
+            error_string_dims = (3, num_pixels_to_predict)
     else:
         print('Bad shape for true_pixels.')
         exit(-1)
-    error_string = np.empty(true_pixels.shape, dtype=dtype)
-
+    error_string = np.empty(error_string_dims, dtype=dtype)
     # Build error string by running each pixel through the predictor, batching
     # the data keep memory use reasonable
-    remaining_samples_to_predict = true_pixels.shape[1]
+    remaining_samples_to_predict = num_pixels_to_predict
     start_index = 0
+    imgs_processed = min(data.shape[0], 10)
+    if should_extract_context_on_fly:
+        context_string_reservoir, true_pixel_reservoir = extract_training_pairs(data[n_prev:n_prev+imgs_processed],
+                                                                                n_prev,
+                                                                                prev_context_indices,
+                                                                                current_context_indices)
+        context_string_reservoir = np.array(context_string_reservoir)
+        context_string_reservoir = np.reshape(context_string_reservoir, (-1,) + evaluation_context.shape[1:])
+        true_pixel_reservoir = np.array(true_pixel_reservoir)
     while remaining_samples_to_predict > 0:
         predict_batch_size = min(remaining_samples_to_predict, 1 if in_cubist_mode else 1000)
         s = start_index
         e = start_index + predict_batch_size
         if in_cubist_mode:
             assert mode == 'single', "Cubist + triple mode is unimplemented"
-            # TODO actually batch
+            # TODO actually batch for cubist
             num_predicates_applicable = 0
             predicted_pixel = 0.0
             for predicate, model in predictors:
-                if eval(predicate, {'x' : training_context[s]}):
-                    predicted_pixel += model.predict([training_context[s]])
+                assert not should_extract_context_on_fly, "Cubist mode not compatible with |should_extract_context_on_the_fly|"
+                # TODO get cubist mode working with |should_extract_context_on_the_fly|
+                if eval(predicate, {'x' : evaluation_context[s]}):
+                    predicted_pixel += model.predict([evaluation_context[s]])
                     num_predicates_applicable += 1
             predicted_pixel /= num_predicates_applicable
             estimated_pixel = predictions_to_pixels(predicted_pixel, dtype)
             error_string[0][s] = true_pixels[0][s] - estimated_pixel
         else:
-            for i in range(n_pred):
-                predictions = predictors[i].predict(training_context[s:e])
-                estimated_pixels = predictions_to_pixels(predictions, dtype)
-                error_string[i][s:e] = true_pixels[i][s:e] - estimated_pixels
+            if should_extract_context_on_fly:
+                print("size of context_string_reservoir", context_string_reservoir.shape)
+                print("size of true_pixel_reservoir", true_pixel_reservoir.shape)
+                print("s=",s,"e=",e)
+                if len(true_pixel_reservoir) < predict_batch_size:
+                    #20 20 1000 376 1000
+                    print(data.shape[0], imgs_processed, predict_batch_size, len(true_pixel_reservoir), predict_batch_size)
+                    addl_imgs_to_process = min(data.shape[0] - imgs_processed, 10)
+                    if addl_imgs_to_process == 0:
+                        predict_batch_size = len(true_pixel_reservoir)
+                        break
+                    assert addl_imgs_to_process > 0
+                    addl_contexts, addl_true_pixels = extract_training_pairs(data[imgs_processed:imgs_processed+addl_imgs_to_process],
+                                                                             n_prev,
+                                                                             prev_context_indices,
+                                                                             current_context_indices)
+                    imgs_processed += addl_imgs_to_process
+                    addl_contexts = np.array(addl_contexts)
+                    addl_contexts = np.reshape(addl_contexts, (-1,) + evaluation_context.shape[1:])
+                    context_string_reservoir = np.vstack((context_string_reservoir, addl_contexts))
+                    true_pixel_reservoir = np.vstack((true_pixel_reservoir, np.array(addl_true_pixels)))
+                    print("after adding stuff to reservoir, shape is", true_pixel_reservoir.shape)
+                    print("size of context_string_reservoir", context_string_reservoir.shape)
+        for i in range(n_pred):
+            if should_extract_context_on_fly:
+                contexts_for_eval = context_string_reservoir[0:predict_batch_size]
+                true_pixels_for_eval = true_pixel_reservoir[i][0:predict_batch_size]
+            else:
+                print("taking s",s,"to e",e)
+                contexts_for_eval = evaluation_context[s:e]
+                true_pixels_for_eval = true_pixels[i][s:e]    
+                
+            predictions = predictors[i].predict(contexts_for_eval)
+            estimated_pixels = predictions_to_pixels(predictions, dtype)
+            error_string[i][s:e] = true_pixels_for_eval - estimated_pixels
+        if should_extract_context_on_fly:
+            context_string_reservoir = np.delete(context_string_reservoir, slice(0, predict_batch_size), axis=0)
+            true_pixel_reservoir = np.delete(true_pixel_reservoir, slice(0, predict_batch_size), axis=0)
+            print("post-deletion size of context_string_reservoir", context_string_reservoir.shape)
+            print("size of true_pixel_reservoir", true_pixel_reservoir.shape)
+
         start_index += predict_batch_size
         remaining_samples_to_predict -= predict_batch_size
 
