@@ -53,9 +53,9 @@ def predictive_comp(data, predictors, evaluation_context, true_pixels, n_prev,
     prev_context_indices = name_to_context_pixels(pcs)
 
     pixel_preds = get_valid_pixels_for_predictions(data[0].shape, current_context_indices, prev_context_indices, False)
+    # This is on a per-channel basis
     num_pixels_to_predict = (pixel_preds[1] - pixel_preds[0] + 1) * (pixel_preds[3] - pixel_preds[2] + 1) \
                             * (data.shape[0] - n_prev)
-    print("expecting num_pixels_to_predict = ", num_pixels_to_predict, "and got", true_pixels.shape[1])
     # If true, it means the predictor was trained on a subset of the original data (for size or
     # performance reasons), so we must grab the context for each pixel and its value on the fly.
     should_extract_context_on_fly = (true_pixels.shape[1] != num_pixels_to_predict)
@@ -98,6 +98,8 @@ def predictive_comp(data, predictors, evaluation_context, true_pixels, n_prev,
         context_string_reservoir = np.array(context_string_reservoir)
         context_string_reservoir = np.reshape(context_string_reservoir, (-1,) + evaluation_context.shape[1:])
         true_pixel_reservoir = np.array(true_pixel_reservoir)
+        true_pixel_reservoir = np.reshape(true_pixel_reservoir, (true_pixels.shape[0],) + true_pixel_reservoir.shape)
+        
     while remaining_samples_to_predict > 0:
         predict_batch_size = min(remaining_samples_to_predict, 1 if in_cubist_mode else 1000)
         s = start_index
@@ -118,7 +120,7 @@ def predictive_comp(data, predictors, evaluation_context, true_pixels, n_prev,
             error_string[0][s] = true_pixels[0][s] - estimated_pixel
         else:
             if should_extract_context_on_fly:
-                if len(true_pixel_reservoir) < predict_batch_size:
+                if true_pixel_reservoir.shape[1] < predict_batch_size:
                     addl_imgs_to_process = min(data.shape[0] - imgs_processed, 10)
                     assert addl_imgs_to_process > 0
                     addl_contexts, addl_true_pixels = extract_training_pairs(data[imgs_processed - n_prev:imgs_processed + addl_imgs_to_process],
@@ -128,8 +130,11 @@ def predictive_comp(data, predictors, evaluation_context, true_pixels, n_prev,
                     imgs_processed += addl_imgs_to_process
                     addl_contexts = np.array(addl_contexts)
                     addl_contexts = np.reshape(addl_contexts, (-1,) + evaluation_context.shape[1:])
+
+                    addl_true_pixels = np.array(addl_true_pixels)
+                    addl_true_pixels = np.reshape(addl_true_pixels, (true_pixels.shape[0],) + addl_true_pixels.shape)
                     context_string_reservoir = np.vstack((context_string_reservoir, addl_contexts))
-                    true_pixel_reservoir = np.vstack((true_pixel_reservoir, np.array(addl_true_pixels)))
+                    true_pixel_reservoir = np.concatenate((true_pixel_reservoir, addl_true_pixels), axis=1)
         for i in range(n_pred):
             if should_extract_context_on_fly:
                 contexts_for_eval = context_string_reservoir[0:predict_batch_size]
@@ -137,13 +142,12 @@ def predictive_comp(data, predictors, evaluation_context, true_pixels, n_prev,
             else:
                 contexts_for_eval = evaluation_context[s:e]
                 true_pixels_for_eval = true_pixels[i][s:e]    
-                
             predictions = predictors[i].predict(contexts_for_eval)
             estimated_pixels = predictions_to_pixels(predictions, dtype)
             error_string[i][s:e] = true_pixels_for_eval - estimated_pixels
         if should_extract_context_on_fly:
             context_string_reservoir = np.delete(context_string_reservoir, slice(0, predict_batch_size), axis=0)
-            true_pixel_reservoir = np.delete(true_pixel_reservoir, slice(0, predict_batch_size), axis=0)
+            true_pixel_reservoir = np.delete(true_pixel_reservoir, slice(0, predict_batch_size), axis=1)
 
         start_index += predict_batch_size
         remaining_samples_to_predict -= predict_batch_size

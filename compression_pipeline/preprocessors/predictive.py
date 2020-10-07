@@ -202,8 +202,8 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
         # TODO: Validate loaded training context and true pixels to ensure they
         #       match shape, etc. of parameters and data passed in
     else:
-        print("TRAINING ON A SUBSET")
         subset_num_training_imgs = min(12, ordered_dataset.shape[0] - 1 - num_prev_imgs)
+        print("TRAINING ON %d IMAGES OUT OF %d" % (subset_num_training_imgs, ordered_dataset.shape[0]))
         # Can't select one of the first |num_prev_imgs| to get context from
         training_indices = np.random.choice(np.arange(num_prev_imgs, ordered_dataset.shape[0]), subset_num_training_imgs)
         training_context = []
@@ -226,7 +226,6 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
         end_extraction = timer()
         print(f'\tExtracted training pairs in ' + \
             f'{timedelta(seconds=end_extraction-start)}.')
-        print("we extracted %d training pixels" % len(true_pixels))
         np.save(f'training_context_{date_str}', np.array(training_context))
         np.save(f'true_pixels_{date_str}', np.array(true_pixels))
 
