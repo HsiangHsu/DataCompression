@@ -163,7 +163,7 @@ print(f'\nload in {timedelta(seconds=end-start)}.\n')
 
 # Save the numpy array form of the dataset in order to validate
 # correctness of decompression
-np.save('data_in', data)
+#np.save('data_in', data)
 
 start = timer()
 if args.pre:
