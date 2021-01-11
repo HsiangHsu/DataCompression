@@ -1,5 +1,14 @@
+#!/usr/bin/env python3
+
+'''
+visualize_dict.py
+
+Script for visualizing atoms in dictionary for dictionary coding.
+'''
+
 from matplotlib import pyplot as plt
 import numpy as np
+
 
 dictionary = np.load('dictionary.npy').reshape((-1, 28, 28))
 data = np.load('udata_in.npy').reshape((-1, 28, 28))

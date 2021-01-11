@@ -14,10 +14,12 @@ from timeit import default_timer as timer
 
 from utilities import find_dtype
 
+class DisconnectedKNN(Exception):
+    pass
 
-def knn_mst_comp(data, element_axis, metric, minkowski_p):
+def knn_mst_comp(data, element_axis, metric, minkowski_p, k=1000):
     '''
-    K Nearest Neighbors and Minimum Spanning Tree compressor
+    K Nearest Neighbors and Minimum Spanning Tree Compressor
 
     The KNN graph is constructed and the MST is then calculated on that
     graph. The MST is then used to produce an ordering of the elements such
@@ -32,6 +34,8 @@ def knn_mst_comp(data, element_axis, metric, minkowski_p):
             distance metric used to build KNN graph
         minkowski_p: int
             parameter used for the Minkowski distance metric
+        k: int (optional, default=1000)
+            parameter for the KNN graph
 
     Returns:
         ordered_data: numpy array
@@ -42,6 +46,9 @@ def knn_mst_comp(data, element_axis, metric, minkowski_p):
             the original dataset order, of shape (n_layers, n_elements)
         original_shape: tuple
             shape of original data
+
+    Raises:
+        DisconnectedKNN if |k| is too small for the KNN graph to be connected
     '''
 
     # reshape data into a 3D array: (n_layers, n_elements, n_points)
@@ -55,23 +62,23 @@ def knn_mst_comp(data, element_axis, metric, minkowski_p):
     inverse_orders = np.empty(data.shape[:2], dtype=invor_dtype)
     ordered_data = np.empty(data.shape, dtype=data.dtype)
 
+    # Builds a separate KNN graph and MST for each patch on each layer
     for i in range(n_layers):
-        print(f'\tLayer {i}:')
         start = timer()
 
-        # Builds a separate KNN graph and MST for each patch on each layer
         unique_data, unique_indices = np.unique(data[i], axis=0,
             return_index=True)
 
-        knn_graph = kneighbors_graph(unique_data,
-            min(len(unique_data)-1, 1000),
+        k = min(len(unique_data)-1, k)
+        knn_graph = kneighbors_graph(unique_data, k,
             metric=metric, p=minkowski_p, mode='distance', n_jobs=-1)
 
-        assert connected_components(knn_graph, directed=False, \
-            return_labels=False) == 1
+        if connected_components(knn_graph, directed=False, \
+            return_labels=False) != 1:
+            raise DisconnectedKNN("KNN graph is disconnected. Increase K.")
 
         end = timer()
-        print(f'\tknn_graph in {timedelta(seconds=end-start)}.')
+        print(f'\t{k}-nn graph in {timedelta(seconds=end-start)}.')
         start = timer()
 
         mst = minimum_spanning_tree(knn_graph, overwrite=True)
@@ -93,7 +100,7 @@ def knn_mst_comp(data, element_axis, metric, minkowski_p):
 
 def knn_mst_decomp(compression, inverse_orders, original_shape):
     '''
-    K Nearest Neighbors and Minimum Spanning Tree compressor
+    K Nearest Neighbors and Minimum Spanning Tree Decompressor
 
     See docstring on the corresponding compressor for more information.
 
@@ -108,7 +115,7 @@ def knn_mst_decomp(compression, inverse_orders, original_shape):
 
     Returns:
         decompression: numpy array
-            decompressed data, of shape
+            decompressed data
     '''
 
     n_layers = compression.shape[0]
@@ -123,9 +130,31 @@ def knn_mst_decomp(compression, inverse_orders, original_shape):
 
 
 def generate_order(data, n_elements, mst, unique_indices):
+    '''
+    Helper function to generate a flat ordering from a minimum spanning tree by
+    performing a depth-first search through that tree.
+
+    Args:
+        data: numpy array
+            data to be ordered
+        n_elements: numpy array
+            number of elements in data (i.e. data.shape[0])
+        mst: sparse array
+            minimum spanning tree from which to generate order
+        unique_indices: list
+            list of indices into data for elements which ae present in mst
+
+    Returns:
+        ordered_data: numpy array
+            ordered data based on mst
+        order: numpy array
+            ordering based on mst
+    '''
+
     mst_indices = np.unique(np.array(mst.nonzero()).ravel())
     order = np.empty(0, np.uint32)
 
+    # Degenerate case when the MST is empty: all elements are the same
     if len(mst_indices) == 0:
         order = pad_order(order, n_elements, data)
         return data[order], order
@@ -141,6 +170,25 @@ def generate_order(data, n_elements, mst, unique_indices):
     return data[order], order
 
 def pad_order(order, n, data):
+    '''
+    Helper function to 'pad' an ordering by inserting indices of duplicate
+    elements next to each other, as this does not increase the total distance
+    cost of traversing the order while also ensuring that every element from
+    the data set is represented in the order.
+
+    Args:
+        order: numpy array
+            order to pad
+        n: int
+            target length of padded order
+        data: numpy array
+            data which is to be ordered
+
+    Returns:
+        order: numpy array
+            padded order
+    '''
+
     missing_idxs = np.setdiff1d(np.arange(n), order)
     if missing_idxs.shape[0] == n:
         return missing_idxs
@@ -160,4 +208,5 @@ def pad_order(order, n, data):
         match_idxs = np.intersect1d(np.where(np.all(data == missing_data[i],
             axis=1)), missing_idxs)
         order = np.insert(order, insert_idx, match_idxs)
+
     return order

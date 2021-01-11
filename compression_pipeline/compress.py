@@ -3,7 +3,7 @@
 '''
 driver_compress.py
 
-This is the executable used to compress a dataset.
+This is the executable used to compress a data set.
 All parameters for compression are passed in as command-line arguments.
 After parsing arguments, the work is delegated to the loader,
 preprocessor, and compressor modules.
@@ -26,7 +26,7 @@ parser.add_argument('dataset', type=str, help='dataset to compress',
 
 pre_group = parser.add_argument_group('preprocessor')
 pre_group.add_argument('--pre', type=str,
-    choices=['sqpatch', 'rgb', 'rgb-sqpatch', 'dict'],
+    choices=['sqpatch', 'rgb', 'rgb-sqpatch', 'dict', 'predictive'],
     help='preprocessor to use', dest='pre')
 pre_group.add_argument('--rgb-r', type=int,
     help='rows in rgb data', dest='rgbr')
@@ -42,9 +42,42 @@ pre_group.add_argument('--niter', type=int, default=100,
     help='number of mini-batch iterations')
 pre_group.add_argument('--bsz', type=int, default=10,
     help='mini-batch size')
+# For predictive coding in predicting pixel X in
+#   A B C
+#   D X E
+#   F G H
+pre_group.add_argument('--predictor-family', type=str, default='linear',
+    dest='predictor_family', choices=['linear', 'logistic', 'cubist'],
+    help='model class to use for predicting pixels')
+pixel_context_strategies = ['DAB', 'DABC']
+prev_pixel_context_strategies = pixel_context_strategies + ['DABX']
+pre_group.add_argument('--ordering', type=str, default='random',
+    choices=['random', 'mst', 'hamiltonian'],
+    help='dataset ordering strategy for predictive coding')
+pre_group.add_argument('--k', type=int, 
+    help='initial value of k to try for the kNN graph')
+pre_group.add_argument('--prev-context', type=str, default='DAB',
+    dest='prev_context', choices = prev_pixel_context_strategies,
+    help='context pixels for predictive coding prior images')
+pre_group.add_argument('--current-context', type=str, default='DAB',
+    dest='curr_context', choices = pixel_context_strategies,
+    help='context pixels for predictive coding current image')
+pre_group.add_argument('--num-prev-imgs', type=int, default=2,
+    dest='num_prev_imgs')
+pre_group.add_argument('--mode', type=str, choices=['triple', 'single'],
+    default='single')
+pre_group.add_argument('--num-cubist-rules', type=int, default=5)
+pre_group.add_argument('--feature-file', type=str, dest='feature_file',
+    required=False)
+pre_group.add_argument('--label-file', type=str, dest='label_file',
+    required=False)
+pre_group.add_argument('--predictor-file', type=str, dest='predictor_file',
+    required=False)
+pre_group.add_argument('--load-state', type=int, dest='load_state',
+    nargs=2, required=False)
 
 comp_group = parser.add_argument_group('compressor')
-comp_group.add_argument('--comp', type=str, choices=['knn-mst'],
+comp_group.add_argument('--comp', type=str, choices=['knn-mst', 'predictive'],
     help='compressor to use', dest='comp', default='knn-mst')
 comp_group.add_argument('--metric', type=str,
     help='distance metric for knn-mst', choices=['hamming', 'minkowski'],
@@ -52,8 +85,15 @@ comp_group.add_argument('--metric', type=str,
 comp_group.add_argument('--minkp', type=int,
     help='parameter for Minkowski metric', dest='minkowski_p', default=2)
 comp_group.add_argument('--enc', type=str,
-    choices=['delta-coo', 'delta-huff', 'video'],
+    choices=['delta-coo', 'delta-huff', 'video', 'pred-huff', 'pred-golomb',
+    'pred-huff-run'],
     help='encoder to use', dest='enc', default='delta-huff')
+comp_group.add_argument('--error-k', type=int,
+    help='golomb paramater for error string', dest='error_k',
+    default=8)
+comp_group.add_argument('--residual-k', type=int,
+    help='golomb paramater for error string', dest='residual_k',
+    default=32)
 
 video_enc_group = parser.add_argument_group('video encoding')
 valid_intermediate_frame_codecs = ['jpg', 'png']
@@ -88,12 +128,31 @@ if args.gop_strat not in ['default', 'max']:
         parser.error('GoP strategy must be default, max, or an integer')
 if args.framerate < 1:
     parser.error('framerate must be >= 1')
+if args.k and not (args.ordering == 'mst' or args.ordering == 'hamiltonian'):
+    parser.error('must use MST or hamiltonian ordering to specify k argument')
 
 if (args.pre == 'sqpatch' or args.pre == 'rgb-sqpatch') and not args.psz:
     parser.error('must supply --psz for sqpatch')
 if (args.pre == 'rgb' or args.pre == 'rgb-sqpatch') and \
     (not (args.rgbr and args.rgbc)):
     parser.error('must supply --rgb-r and --rgb-c for rgb')
+        
+predictives = ['predictive', 'pred-huff', 'pred-golomb', 'pred-huff-run']
+
+for arg in (args.pre, args.comp, args.enc):
+    if arg in predictives:
+        for arg_2 in (args.pre, args.comp, args.enc):
+            try:
+                assert arg_2 in predictives
+            except AssertionError:
+                parser.error('Must use predictive options for all fields')
+if args.num_prev_imgs < 0:
+    parser.error("Must specify non-negative number of " + \
+        "previous images for predictive coding")
+if (args.feature_file is None and args.label_file is not None) \
+    or (args.feature_file is not None and args.label_file is None):
+    paser.error("Must specify both training feature and label " + \
+        "files if not extracting from dataset")
 
 full_start = timer()
 
@@ -104,7 +163,7 @@ print(f'\nload in {timedelta(seconds=end-start)}.\n')
 
 # Save the numpy array form of the dataset in order to validate
 # correctness of decompression
-np.save('data_in', data)
+#np.save('data_in', data)
 
 start = timer()
 if args.pre:
@@ -117,7 +176,7 @@ print(f'preprocess in {timedelta(seconds=end-start)}.\n')
 
 start = timer()
 compressed_data, comp_metadata, original_shape = compress(data, element_axis,
-    args)
+    pre_metadata, args)
 end = timer()
 print(f'compress in {timedelta(seconds=end-start)}.\n')
 

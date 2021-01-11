@@ -72,6 +72,8 @@ def load(dataset):
             with open(os.path.join(dirpath, datapath), 'rb') as f:
                 raw_data = pickle.load(f, encoding='bytes')
                 data[(i-1)*10000:i*10000] = raw_data[b'data']
+        # RGB triples
+        data = data.reshape((50000, 3, 32, 32)).transpose((0, 2, 3, 1))
         return (data, None)
 
     elif dataset == 'adult':
@@ -90,3 +92,4 @@ def load(dataset):
         for col in df:
             df[col] = pd.to_numeric(df[col], downcast='unsigned')
         return (np.ascontiguousarray(df.to_numpy()), None)
+    assert False, "Could not load specified dataset %s" % dataset
