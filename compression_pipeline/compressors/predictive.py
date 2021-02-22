@@ -9,6 +9,10 @@ import numpy as np
 from utilities import name_to_context_pixels, predictions_to_pixels, \
     get_valid_pixels_for_predictions
 
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras.models import Sequential
+
 def predictive_comp(data, predictors, training_context, true_pixels, n_prev,
     pcs, ccs, mode):
     '''
@@ -95,7 +99,20 @@ def predictive_comp(data, predictors, training_context, true_pixels, n_prev,
             error_string[0][s] = true_pixels[0][s] - estimated_pixel
         else:
             for i in range(n_pred):
-                predictions = predictors[i].predict(training_context[s:e])
+                if isinstance(predictors[0], keras.Sequential):
+                    assert n_pred == 1
+                    predictions = np.argmax(predictors[0].predict(training_context[s:e]), axis=1)
+                    
+                    # TODO this is messy to duplicate the logic from preprocessor...sigh
+                    q = np.quantile(true_pixels[0], np.linspace(0,1,31), interpolation='nearest')
+                    Yq = np.argmin(np.abs((true_pixels[0].reshape(-1,1).astype(np.int16) - \
+                                            q.reshape(1,-1).astype(np.int16))), axis=1)
+                    quantiles, _ = np.unique(Yq, return_counts=True) 
+                    
+                    # map predicted value to quantile
+                    predictions = np.array([q[quantiles[ix]] for ix in predictions])
+                else:
+                    predictions = predictors[i].predict(training_context[s:e])
                 estimated_pixels = predictions_to_pixels(predictions, dtype)
                 error_string[i][s:e] = true_pixels[i][s:e] - estimated_pixels
         start_index += predict_batch_size

@@ -16,6 +16,14 @@ import rpy2.robjects.packages as rpackages
 from rpy2.robjects.packages import importr
 from rpy2.robjects.vectors import StrVector
 
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+from tensorflow.keras import backend as K
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import OneHotEncoder
+
 import pickle
 import re
 
@@ -172,7 +180,7 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
 
     prev_context_indices = name_to_context_pixels(prev_context)
     current_context_indices = name_to_context_pixels(cur_context)
-    assert predictor_family in ['linear', 'logistic', 'cubist'], \
+    assert predictor_family in ['linear', 'logistic', 'cubist', 'quantile'], \
         "Only linear, logistic, and cubist predictors are currently supported"
     assert num_cubist_rules is None if predictor_family != 'cubist' else True, \
         "Can only specify |num_cubist_rules| when using the cubist predictor"
@@ -303,11 +311,49 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
                     lin_model.coef_ = np.array(coefs)
                     clf.append((predicate, lin_model))
             rpy2.robjects.numpy2ri.deactivate()
+        elif predictor_family == "quantile":
+            clf = []
+            q = np.quantile(true_pixels, np.linspace(0,1,31),interpolation='nearest')
+            print("Quantiles: "+str(q))
+
+            # map to quantile
+            Yq = np.argmin(np.abs((true_pixels.reshape(-1,1).astype(np.int16)-q.reshape(1,-1).astype(np.int16))),axis=1)
+
+            # number of quantiles
+            quantiles, counts = np.unique(Yq, return_counts=True) 
+            num_quantiles = len(quantiles)
+
+            print("Distribution: "+str(counts/len(Yq)))
+            print("Quantiles: "+str(list(set(q))))
+
+            # one hot encode
+            enc = OneHotEncoder()
+            Yc = enc.fit_transform(Yq.reshape(-1,1))
+
+            # Create Keras model
+            model = Sequential()
+            model.add(Dense(256, activation='relu',input_dim=training_context.shape[1], use_bias=True,bias_initializer="zeros"))
+            model.add(Dense(256, activation='relu', use_bias=True,bias_initializer="zeros"))
+            model.add(Dense(num_quantiles,activation="softmax",use_bias=True,bias_initializer="zeros"))
+            loss_fn = keras.losses.CategoricalCrossentropy()
+            model.compile(loss=loss_fn, optimizer='adam', metrics=["accuracy"])
+            model.fit(training_context, Yc, epochs=100, batch_size=50000,verbose=1)
+
+            # save weights
+            weights = model.get_weights()
+            file = 'keras-weights-mnist-quantile.npz'
+            np.savez_compressed(file, weights=weights)
+            clf = [model]
+            input()
+        else:
+            print("ERROR: unknown predictor_family %s" % predictor_family)
+            quit()
 
         end_model_fitting = timer()
         print(f'\tTrained a {predictor_family} model in ' + \
             f'{timedelta(seconds=end_model_fitting-start)}.')
 
+        print("TODO compute quantile accuracy")
         if predictor_family in ['linear', 'logistic']:
                 with open(f'predictor_{date_str}.out', 'wb') as f:
                         pickle.dump(clf, f)

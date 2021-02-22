@@ -47,7 +47,7 @@ pre_group.add_argument('--bsz', type=int, default=10,
 #   D X E
 #   F G H
 pre_group.add_argument('--predictor-family', type=str, default='linear',
-    dest='predictor_family', choices=['linear', 'logistic', 'cubist'],
+    dest='predictor_family', choices=['linear', 'logistic', 'cubist', 'quantile'],
     help='model class to use for predicting pixels')
 pixel_context_strategies = ['DAB', 'DABC']
 prev_pixel_context_strategies = pixel_context_strategies + ['DABX']

@@ -45,6 +45,7 @@ def pred_huffman_enc(compression, pre_metadata, original_shape, args):
     error_string, residuals, clf = compression
     n_clf = len(clf)
     is_cubist_mode = args.predictor_family == 'cubist'
+    is_quantile = args.predictor_family == 'quantile'
     n_errors = error_string.shape[0]
     n_residuals = residuals.shape[0]
     n_prev = pre_metadata[0]
@@ -66,6 +67,9 @@ def pred_huffman_enc(compression, pre_metadata, original_shape, args):
             metastream += len(c[0]).to_bytes(1, 'little')
             metastream += c[0].encode()
         metastream += encode_predictor([c[1] for c in clf])
+    elif is_quantile:
+        # TODO
+        pass
     else:
         metastream += encode_predictor(clf)
     metastream += n_prev.to_bytes(1, 'little')
