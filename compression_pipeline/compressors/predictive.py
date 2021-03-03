@@ -54,7 +54,7 @@ def predictive_comp(data, predictors, training_context, true_pixels, n_prev,
     dtype = data.dtype
     current_context_indices = name_to_context_pixels(ccs)
     prev_context_indices = name_to_context_pixels(pcs)
-
+    
     # Based on the dimensions of true_pixels and the value of mode, determine
     # how to shape the residuals for the most convenient computations
     in_cubist_mode = n_pred != true_pixels.shape[0]
@@ -79,44 +79,49 @@ def predictive_comp(data, predictors, training_context, true_pixels, n_prev,
 
     # Build error string by running each pixel through the predictor, batching
     # the data keep memory use reasonable
-    remaining_samples_to_predict = true_pixels.shape[1]
-    start_index = 0
-    while remaining_samples_to_predict > 0:
-        predict_batch_size = min(remaining_samples_to_predict, 1 if in_cubist_mode else 1000)
-        s = start_index
-        e = start_index + predict_batch_size
-        if in_cubist_mode:
-            assert mode == 'single', "Cubist + triple mode is unimplemented"
-            # TODO actually batch
+    if isinstance(predictors[0], keras.Sequential):
+        # Quantile mode
+        assert n_pred == 1
+        predictions = np.argmax(predictors[0].predict(training_context, batch_size=50000), axis=1)
+        
+        # TODO this is messy to duplicate the logic from preprocessor...sigh
+        q = np.quantile(true_pixels[0], np.linspace(0,1,31), interpolation='nearest')
+        Yq = np.argmin(np.abs((true_pixels[0].reshape(-1,1).astype(np.int16) - \
+                               q.reshape(1,-1).astype(np.int16))), axis=1)
+        quantiles, _ = np.unique(Yq, return_counts=True) 
+        
+        # map predicted value to quantile
+        predictions = np.array([q[quantiles[ix]] for ix in predictions])
+        estimated_pixels = predictions_to_pixels(predictions, dtype)
+        print("num pixels diff between |predictions| vs |estimated_pixels|", np.count_nonzero(predictions - estimated_pixels))
+        error_string[0] = true_pixels[0] - estimated_pixels
+    else:
+        # Not quantile mode
+        remaining_samples_to_predict = true_pixels.shape[1]
+        start_index = 0
+        while remaining_samples_to_predict > 0:
+            predict_batch_size = min(remaining_samples_to_predict, 1 if in_cubist_mode else 1000)
+            s = start_index
+            e = start_index + predict_batch_size
+            if in_cubist_mode:
+                assert mode == 'single', "Cubist + triple mode is unimplemented"
+                # TODO actually batch
             num_predicates_applicable = 0
             predicted_pixel = 0.0
             for predicate, model in predictors:
                 if eval(predicate, {'x' : training_context[s]}):
                     predicted_pixel += model.predict([training_context[s]])
                     num_predicates_applicable += 1
-            predicted_pixel /= num_predicates_applicable
-            estimated_pixel = predictions_to_pixels(predicted_pixel, dtype)
-            error_string[0][s] = true_pixels[0][s] - estimated_pixel
-        else:
-            for i in range(n_pred):
-                if isinstance(predictors[0], keras.Sequential):
-                    assert n_pred == 1
-                    predictions = np.argmax(predictors[0].predict(training_context[s:e]), axis=1)
-                    
-                    # TODO this is messy to duplicate the logic from preprocessor...sigh
-                    q = np.quantile(true_pixels[0], np.linspace(0,1,31), interpolation='nearest')
-                    Yq = np.argmin(np.abs((true_pixels[0].reshape(-1,1).astype(np.int16) - \
-                                            q.reshape(1,-1).astype(np.int16))), axis=1)
-                    quantiles, _ = np.unique(Yq, return_counts=True) 
-                    
-                    # map predicted value to quantile
-                    predictions = np.array([q[quantiles[ix]] for ix in predictions])
+                    predicted_pixel /= num_predicates_applicable
+                    estimated_pixel = predictions_to_pixels(predicted_pixel, dtype)
+                    error_string[0][s] = true_pixels[0][s] - estimated_pixel
                 else:
-                    predictions = predictors[i].predict(training_context[s:e])
-                estimated_pixels = predictions_to_pixels(predictions, dtype)
-                error_string[i][s:e] = true_pixels[i][s:e] - estimated_pixels
-        start_index += predict_batch_size
-        remaining_samples_to_predict -= predict_batch_size
+                    for i in range(n_pred):
+                        predictions = predictors[i].predict(training_context[s:e])
+                        estimated_pixels = predictions_to_pixels(predictions, dtype)
+                        error_string[i][s:e] = true_pixels[i][s:e] - estimated_pixels
+                        start_index += predict_batch_size
+                        remaining_samples_to_predict -= predict_batch_size
 
     # Build residuals by slicing every image in the data set based on the
     # context strings

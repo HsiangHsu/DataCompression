@@ -121,7 +121,7 @@ def __compute_classifier_accuracy(clf, predictor_family, training_context, true_
             remaining_samples_to_predict -= predict_batch_size
         return right_pixels_count / len(true_pixels)
     assert False, 'Must be a logistic or linear predictor to compute accuracy'
-
+    
 
 def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
                     prev_context, cur_context, mode, num_cubist_rules,
@@ -328,7 +328,7 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
 
             # one hot encode
             enc = OneHotEncoder()
-            Yc = enc.fit_transform(Yq.reshape(-1,1))
+            Yc = enc.fit_transform(Yq.reshape(-1,1)).todense()
 
             # Create Keras model
             model = Sequential()
@@ -337,14 +337,13 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
             model.add(Dense(num_quantiles,activation="softmax",use_bias=True,bias_initializer="zeros"))
             loss_fn = keras.losses.CategoricalCrossentropy()
             model.compile(loss=loss_fn, optimizer='adam', metrics=["accuracy"])
-            model.fit(training_context, Yc, epochs=100, batch_size=50000,verbose=1)
+            history = model.fit(training_context, Yc, epochs=10, batch_size=50000,verbose=2)
 
             # save weights
             weights = model.get_weights()
             file = 'keras-weights-mnist-quantile.npz'
             np.savez_compressed(file, weights=weights)
             clf = [model]
-            input()
         else:
             print("ERROR: unknown predictor_family %s" % predictor_family)
             quit()
@@ -353,7 +352,14 @@ def train_predictor(predictor_family, ordered_dataset, num_prev_imgs,
         print(f'\tTrained a {predictor_family} model in ' + \
             f'{timedelta(seconds=end_model_fitting-start)}.')
 
-        print("TODO compute quantile accuracy")
+        if predictor_family == "quantile":
+                print('\t\t(Accuracy (in last epoch): %05f)' % history.history['accuracy'][-1])
+                '''
+                guesses = np.argmax(clf[0].predict(training_context, batch_size=50000), axis=1)
+                print("a single guess before argmax looks like", clf[0].predict(training_context[0]))
+                correct_pixels = np.count_nonzero(np.ravel(guesses.astype(np.int16))-np.ravel(true_pixels[0].astype(np.int16)))
+                print("true_pixels[0].shape", true_pixels[0].shape)
+                print('\t\t(Accuracy : %05f)' % correct_pixels/true_pixels[0].shape[0]) '''
         if predictor_family in ['linear', 'logistic']:
                 with open(f'predictor_{date_str}.out', 'wb') as f:
                         pickle.dump(clf, f)
