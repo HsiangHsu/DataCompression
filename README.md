@@ -1,20 +1,48 @@
 # DataCompression
 
-## Huffman Coding
+The compression pipeline has four stages:
+
+- Load
+- Preprocess
+- Compress
+- Encode
+
+The high-level logic for each of them is found in `driver.py` and is called by `compress.py`. Each subdirectory contains specific implementations of different preprocessors, compressors, and encoders.
+
+The load stage unpacks the desired dataset into a properly shaped NumPy array. The preprocess stage computes any needed data for compression; in predictive coding, this incorporates extraction of training context  and training the model. The compress stage goes item-by-item in the dataset and applies some sort of compression logic, whether that's reordering to minimize inter-element distance or applying the predictive model and building the error string. The encode stage is entropy coding; we support both Huffman and Golomb coding.
+
+## Predictive Coding
 Install dependencies:
 ```
-pip3 install bitstring
+pip3 install -r requirements.txt 
 ```
 
-Compress a dataset:
+### Compress a dataset:
 ```
-./compress_dataset.py ../datasets/adult/adult.data
+python3 compress.py [DATASET] --pre predictive --ordering [ORDER] --prev-context [PREV] --current-context [CURR] --comp predictive --enc pred-huff --num-prev-imgs [N] --predictor-family [MODEL] --mode [RGB MODE]
 ```
+Parameters:
 
-Decompress a dataset:
+| Name                    | Meaning   |
+|:-----------------------:|:------:|
+| DATASET            | one of mnist, adult, cifar-10, test, synthetic   |
+| ORDER | Either mst (minimum spanning tree) or random  |
+| PREV                 | One of DAB, DABC, DABX |
+| CURR                 | One of DAB, DABC |
+| MODEL                 | One of linear, logistic, [cubist](https://cran.r-project.org/web/packages/Cubist/vignettes/cubist.html), quantile (ML predicting which quantile the pixel falls into) |
+| RGB MODE                 | Either single (to train a single predictor for rgb tuples) or triple (for three separate predictors); logistic models only work with triple mode |
+
+You can also pass in `--feature-file` and `--label-file` to use pre-extracted training context or `--predictor-file` to use an existing predictor. See compress.py for additional optional parameters. 
+
+### Decompress a dataset:
 ```
-./decompress_dataset.py adult_compressed.data
+./decompress.py --data_in [comp.out FILE] --args_in [args.out FILE]
 ```
+Then run
+```
+./verify.py
+```
+to check that the decompressed dataset equals the original.
 
 ---
 
