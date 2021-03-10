@@ -9,7 +9,7 @@ The compression pipeline has four stages:
 
 The high-level logic for each of them is found in `driver.py` and is called by `compress.py`. Each subdirectory contains specific implementations of different preprocessors, compressors, and encoders.
 
-The load stage unpacks the desired dataset into a properly shaped NumPy array. The preprocess stage computes any needed data for compression; in predictive coding, this incorporates extraction of training context  and training the model. The compress stage goes item-by-item in the dataset and applies some sort of compression logic, whether that's reordering to minimize inter-element distance or applying the predictive model and building the error string. The encode stage is entropy coding; we support both Huffman and Golomb coding.
+The _load_ stage unpacks the desired dataset into a properly shaped NumPy array. The _preprocess_ stage computes any needed data for compression; in predictive coding, this incorporates extraction of training context  and training the model. The _compress_ stage goes item-by-item in the dataset and applies some sort of compression logic, whether that's reordering to minimize inter-element distance or applying the predictive model and building the error string. The _encode_ stage is entropy coding; we support both Huffman and Golomb coding.
 
 ## Predictive Coding
 Install dependencies:
@@ -19,7 +19,9 @@ pip3 install -r requirements.txt
 
 ### Compress a dataset:
 ```
-python3 compress.py [DATASET] --pre predictive --ordering [ORDER] --prev-context [PREV] --current-context [CURR] --comp predictive --enc pred-huff --num-prev-imgs [N] --predictor-family [MODEL] --mode [RGB MODE]
+python3 compress.py [DATASET] --pre predictive --ordering [ORDER] --prev-context [PREV]
+--current-context [CURR] --comp predictive --enc pred-huff --num-prev-imgs [N] 
+--predictor-family [MODEL] --mode [RGB MODE]
 ```
 Parameters:
 
