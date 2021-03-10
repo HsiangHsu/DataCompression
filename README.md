@@ -12,7 +12,7 @@ The high-level logic for each of them is found in `driver.py` and is called by `
 The _load_ stage unpacks the desired dataset into a properly shaped NumPy array. The _preprocess_ stage computes any needed data for compression; in predictive coding, this incorporates extraction of training context  and training the model. The _compress_ stage goes item-by-item in the dataset and applies some sort of compression logic, whether that's reordering to minimize inter-element distance or applying the predictive model and building the error string. The _encode_ stage is entropy coding; we support both Huffman and Golomb coding.
 
 ## Predictive Coding
-Install dependencies:
+### Install dependencies:
 ```
 pip3 install -r requirements.txt 
 ```
@@ -31,6 +31,7 @@ Parameters:
 | ORDER | Either mst (minimum spanning tree) or random  |
 | PREV                 | One of DAB, DABC, DABX |
 | CURR                 | One of DAB, DABC |
+| N                 | The number of previous images to include in training context |
 | MODEL                 | One of linear, logistic, [cubist](https://cran.r-project.org/web/packages/Cubist/vignettes/cubist.html), quantile (ML predicting which quantile the pixel falls into) |
 | RGB MODE                 | Either single (to train a single predictor for rgb tuples) or triple (for three separate predictors); logistic models only work with triple mode |
 
