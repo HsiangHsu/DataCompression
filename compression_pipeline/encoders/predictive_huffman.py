@@ -61,15 +61,13 @@ def pred_huffman_enc(compression, pre_metadata, original_shape, args):
     metastream += ord(error_string.dtype.char).to_bytes(1, 'little')
     metastream += write_shape(original_shape)
     metastream += is_cubist_mode.to_bytes(1, 'little')
+    metastream += is_quantile.to_bytes(1, 'little')
     if is_cubist_mode:
         # Encode predicates (one for each predictor)
         for c in clf:
             metastream += len(c[0]).to_bytes(1, 'little')
             metastream += c[0].encode()
         metastream += encode_predictor([c[1] for c in clf])
-    elif is_quantile:
-        # TODO
-        pass
     else:
         metastream += encode_predictor(clf)
     metastream += n_prev.to_bytes(1, 'little')
@@ -213,6 +211,7 @@ def pred_huffman_dec(comp_file):
     dsize = dtype.itemsize
     original_shape = read_shape(f)
     is_cubist_mode = readint(f, 1)
+    is_quantile = readint(f, 1)
     if is_cubist_mode:
         clf = []
         for i in range(n_pred):

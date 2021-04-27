@@ -93,7 +93,6 @@ def predictive_comp(data, predictors, training_context, true_pixels, n_prev,
         # map predicted value to quantile
         predictions = np.array([q[quantiles[ix]] for ix in predictions])
         estimated_pixels = predictions_to_pixels(predictions, dtype)
-        print("num pixels diff between |predictions| vs |estimated_pixels|", np.count_nonzero(predictions - estimated_pixels))
         error_string[0] = true_pixels[0] - estimated_pixels
     else:
         # Not quantile mode

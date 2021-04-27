@@ -14,7 +14,9 @@ from minimal_binary_coding import minimal_binary_coding
 import numpy as np
 import re
 from sklearn import linear_model
-
+from tensorflow import keras
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.models import Sequential
 
 def valid_pixels_from_context_strategy(img_shape, relative_indices,
     no_input_check=False):
@@ -172,25 +174,41 @@ def encode_predictor(clf):
     '''
 
     stream = b''
-    pred_name = str(clf[0]).split('(')[0]
+    if isinstance(clf[0], keras.Sequential):
+        assert len(clf) == 1, "If using a Keras Sequential model, must have only one"
+        pred_name = "sequential_quantile"
+    else:
+        pred_name = str(clf[0]).split('(')[0]
     stream += len(pred_name).to_bytes(1, 'little')
     stream += pred_name.encode()
 
-    for pred in clf:
-        b_coef = pred.coef_.tobytes()
-        stream += len(b_coef).to_bytes(4, 'little')
-        stream += b_coef
-        stream += write_shape(pred.coef_.shape)
-
-        b_intercept = pred.intercept_.tobytes()
-        stream += len(b_intercept).to_bytes(2, 'little')
-        stream += b_intercept
-        stream += write_shape(pred.intercept_.shape)
-
-        if pred_name == 'SGDClassifier':
-            b_classes = pred.classes_.tobytes()
-            stream += len(b_classes).to_bytes(2, 'little')
-            stream += b_classes
+    if pred_name == "sequential_quantile":
+        weights = clf[0].get_weights()
+        stream += len(weights).to_bytes(1, 'little')
+        total_byte_len = 0
+        total_bytes = b''
+        for i in range(len(weights)):
+            b_weights = weights[i].tobytes()
+            total_bytes += b_weights.to_bytes(4, 'little')
+            total_byte_len += len(b_weights)
+        stream += total_byte_len.to_bytes(4, 'little')
+        stream += total_bytes
+    else:
+        for pred in clf:
+            b_coef = pred.coef_.tobytes()
+            stream += len(b_coef).to_bytes(4, 'little')
+            stream += b_coef
+            stream += write_shape(pred.coef_.shape)
+            
+            b_intercept = pred.intercept_.tobytes()
+            stream += len(b_intercept).to_bytes(2, 'little')
+            stream += b_intercept
+            stream += write_shape(pred.intercept_.shape)
+            
+            if pred_name == 'SGDClassifier':
+                b_classes = pred.classes_.tobytes()
+                stream += len(b_classes).to_bytes(2, 'little')
+                stream += b_classes
 
     return stream
 
@@ -212,11 +230,29 @@ def decode_predictor(f, n_pred):
     '''
 
     predictors = {'LinearRegression':linear_model.LinearRegression,
-        'SGDClassifier':linear_model.SGDClassifier}
+                  'SGDClassifier':linear_model.SGDClassifier,
+                  'sequential_quantile':keras.Sequential}
 
     len_pred_name = readint(f, 1)
     pred_name = f.read(len_pred_name).decode()
 
+    # TODO centralize what the diff architectures are
+    if pred_name == "sequential_quantile":
+        num_layers = readint(f, 4)
+        len_b_weights = readint(f, 4)
+        b_weights = f.read(len_b_weights)
+        # TODO in progress here. we need to write the shape of each layer
+        # then deserialize
+        weights = np.frombuffer(b_weights).reshape(weights_shape)
+
+        model = predictors[pred_name]()
+        model.add(Dense(256, activation='relu'))
+        model.add(Dense(256, activation='relu'))
+        model.add(Dense(num_quantiles,activation="softmax"))
+
+        model.set_weights(weights)
+        return [model]
+    
     clf = [predictors[pred_name]() for i in range(n_pred)]
     for i in range(len(clf)):
         len_b_coef = readint(f, 4)
